@@ -4,6 +4,7 @@ import backoff
 
 completion_tokens = prompt_tokens = 0
 
+# api_key = "lm-studio"
 api_key = os.getenv("OPENAI_API_KEY", "")
 if api_key != "":
     openai.api_key = api_key
@@ -42,4 +43,6 @@ def gpt_usage(backend="gpt-4"):
         cost = completion_tokens / 1000 * 0.06 + prompt_tokens / 1000 * 0.03
     elif backend == "gpt-3.5-turbo":
         cost = completion_tokens / 1000 * 0.002 + prompt_tokens / 1000 * 0.0015
+    else:
+        cost = completion_tokens + prompt_tokens    
     return {"completion_tokens": completion_tokens, "prompt_tokens": prompt_tokens, "cost": cost}

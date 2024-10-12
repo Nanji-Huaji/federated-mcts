@@ -49,7 +49,10 @@ Input: {input}
 '''
 
 # 1-shot
-propose_prompt = '''Input: 2 8 8 14
+propose_prompt = '''
+Please imitate the example below and write out the Possible next steps based on the numbers in the Input. 
+Please note: each number can only be used once.
+Input: 2 8 8 14
 Possible next steps:
 2 + 8 = 10 (left: 8 10 14)
 8 / 2 = 4 (left: 4 8 14)
@@ -104,7 +107,7 @@ impossible
 {input}
 '''
 
-value_last_step_prompt = '''Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Given an input and an answer, give a judgement (sure/impossible) if the answer is correct, i.e. it uses each input exactly once and no other numbers, and reach 24.
+value_last_step_prompt = '''Use numbers and basic arithmetic operations (+ - * /) to obtain 24. Given an input and an answer, give a judgement (sure/impossible) if the answer is correct, i.e. it uses each input exactly once and no other numbers, and reach 24. Please note: each number can only be used once.
 Input: 4 4 6 8
 Answer: (4 + 8) * (6 - 4) = 24
 Judge: 
