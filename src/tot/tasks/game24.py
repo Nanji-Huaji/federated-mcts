@@ -33,7 +33,7 @@ class Game24Task(Task):
         self.data = list(pd.read_csv(path)['Puzzles'])
         self.value_cache = {}
         # self.steps = 4
-        self.steps = 6 # "Steps" is changed for future experiences. Original value is 4.
+        self.steps = 8 # "Steps" is changed for future experiences. Original value is 4.
         self.stops = ['\n'] * 4
 
     def __len__(self) -> int:

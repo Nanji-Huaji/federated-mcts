@@ -2,6 +2,10 @@ import itertools
 import numpy as np
 from functools import partial
 from tot.models import gpt
+import os
+
+token_SLM = 0
+token_LLM = 0
 
 '''
 The part "*_usingLLM" of function name indicates this method using LLM to process tasks.
@@ -33,7 +37,7 @@ def get_value_usingLLM(task, x, y, n_evaluate_sample, cache_value=True):
     value_prompt = task.value_prompt_wrap(x, y)
     if cache_value and value_prompt in task.value_cache:
         return task.value_cache[value_prompt]
-    value_outputs = gpt(value_prompt, n=n_evaluate_sample, stop=None, model='gpt-4o')
+    value_outputs = gpt(value_prompt, n=n_evaluate_sample, stop=None, model='gpt-4o', api_base="https://try-chatgpt.fun/v1", api_key=os.getenv("OPENAI_API_KEY", ""))
     value = task.value_outputs_unwrap(x, y, value_outputs)
     if cache_value:
         task.value_cache[value_prompt] = value
@@ -73,7 +77,7 @@ def get_votes(task, x, ys, n_evaluate_sample):
 
 def get_votes_usingLLM(task, x, ys, n_evaluate_sample):
     vote_prompt = task.vote_prompt_wrap(x, ys)
-    vote_outputs = gpt(vote_prompt, n=n_evaluate_sample, stop=None, model='gpt-4o')
+    vote_outputs = gpt(vote_prompt, n=n_evaluate_sample, stop=None, model='gpt-4o', api_base="https://try-chatgpt.fun/v1", api_key=os.getenv("OPENAI_API_KEY", ""))
     values = task.vote_outputs_unwrap(vote_outputs, len(ys))
     return values
 
@@ -101,6 +105,8 @@ def solve(args, task, idx, to_print=True):
     infos = []
     for step in range(task.steps):
         # generation
+
+        # 我们希望可以使用本地的小模型进行生成, 但是评估部分使用大模型.
         if args.method_generate == 'sample':
             new_ys = [get_samples(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
         elif args.method_generate == 'propose':
@@ -142,13 +148,13 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
     global gpt
     gpt = partial(gpt, model=args.backend, temperature=args.temperature)
     global gpt_evaluator
-    gpt_evaluator = partial(gpt, model='gpt-4o', temperature=args.temperature)
+    gpt_evaluator = partial(gpt, model='gpt-4o', temperature=args.temperature, api_base="https://try-chatgpt.fun/v1", api_key=os.environ.get("OPENAI_API_KEY"))
     print(gpt)
+    print(gpt_evaluator)
     x = task.get_input(idx)  # input
     ys = ['']  # current output candidates
     infos = []
     for step in range(task.steps):
-        # print(f"这是bfs.py中的solve_usingLLM_eval方法, step={step}, steps={task.steps}. 循环开始.")
         # generation
         if args.method_generate == 'sample':
             new_ys = [get_samples(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]

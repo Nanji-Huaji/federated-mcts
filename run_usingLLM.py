@@ -6,6 +6,7 @@ from tot.tasks import get_task
 from tot.methods.bfs import solve, naive_solve, solve_usingLLM_eval
 from tot.models import gpt_usage
 
+import openai
 def run(args):
     task = get_task(args.task)
     logs, cnt_avg, cnt_any = [], 0, 0
@@ -44,8 +45,8 @@ def run(args):
 
 def parse_args():
     args = argparse.ArgumentParser()
-    args.add_argument('--backend', type=str, choices=['gpt-4', 'gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini', 'lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF', 'lmstudio-community/Phi-3.1-mini-128k-instruct-GGUF', 'lmstudio-community/Qwen2.5-7B-Instruct-GGUF', 'lmstudio-community/Qwen2.5-Math-7B-Instruct-GGUF'], default='gpt-4o-mini')
-    args.add_argument('--temperature', type=float, default=0.7)
+    args.add_argument('--backend', type=str, choices=['gpt-4', 'gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini', 'lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF', 'bartowski/Phi-3-medium-128k-instruct-GGUF'], default='bartowski/Phi-3-medium-128k-instruct-GGUF')
+    args.add_argument('--temperature', type=float, default=0.9)
 
     args.add_argument('--task', type=str, required=True, choices=['game24', 'text', 'crosswords'])
     args.add_argument('--task_start_index', type=int, default=900)
@@ -68,6 +69,10 @@ def parse_args():
 if __name__ == '__main__':
     args = parse_args()
     print(args)
+    print(f"api_key为{openai.api_key}, api_base为{openai.api_base}.")
     run(args)
 
     # --task game24 --task_start_index 900 --task_end_index 1000 --method_generate propose --method_evaluate value --method_select greedy --n_evaluate_sample 3 --n_select_sample 5
+
+
+# started at 21:22:59

@@ -51,7 +51,8 @@ Input: {input}
 # 1-shot
 propose_prompt = '''
 Please imitate the example below and write out the Possible next steps based on the numbers in the Input. 
-Please note: each number can only be used once.
+Please note: each number can only be used once, and try to avoid generating completely identical operations.
+
 Input: 2 8 8 14
 Possible next steps:
 2 + 8 = 10 (left: 8 10 14)
