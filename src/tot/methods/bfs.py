@@ -83,7 +83,7 @@ def get_votes_usingLLM(task, x, ys, n_evaluate_sample):
 
 def get_proposals(task, x, y): 
     propose_prompt = task.propose_prompt_wrap(x, y)
-    proposals = gpt(propose_prompt, n=1, stop=None)[0].split('\n')
+    proposals = gpt(propose_prompt, n=1, stop=None, api_key="lm-studio", api_base="http://127.0.0.1:11451/v1", model="bartowski/Phi-3-medium-128k-instruct-GGUF")[0].split('\n')
     return [y + _ + '\n' for _ in proposals]
 
 def get_samples(task, x, y, n_generate_sample, prompt_sample, stop):
@@ -168,7 +168,6 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
             values = get_votes_usingLLM(task, x, new_ys, args.n_evaluate_sample)
         elif args.method_evaluate == 'value':
             values = get_values_usingLLM(task, x, new_ys, args.n_evaluate_sample)
-        # print(f"这是evaluation结束处. step={step}, steps={task.steps}.")
         # selection
         if args.method_select == 'sample':
             ps = np.array(values) / sum(values)
@@ -188,9 +187,7 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
         ys = select_new_ys
     if to_print: 
         print(ys)
-        # print(f"这是bfs.py中的solve_usingLLM_eval方法, step={step}, steps={task.steps}. 位于print(ys)的后面.")
     return ys, {'steps': infos}
-    # print(f"这是bfs.py中的solve_usingLLM_eval方法, 循环结束.")
 
 
 

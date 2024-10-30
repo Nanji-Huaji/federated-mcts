@@ -52,6 +52,7 @@ Input: {input}
 propose_prompt = '''
 Please imitate the example below and write out the Possible next steps based on the numbers in the Input. 
 Please note: each number can only be used once, and try to avoid generating completely identical operations.
+Please strictly adhere to the following output format and do not output any text other than these formats.
 
 Input: 2 8 8 14
 Possible next steps:
@@ -67,7 +68,7 @@ Input: {input}
 Possible next steps:
 '''
 
-value_prompt = '''Evaluate if given numbers can reach 24 (sure/likely/impossible)
+value_prompt = '''Evaluate if given numbers can reach 24 (sure/likely/impossible). Please do not restate the question, do not derive in any way other than the following example.
 10 14
 10 + 14 = 24
 sure

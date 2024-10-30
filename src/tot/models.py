@@ -25,7 +25,7 @@ if api_base != "":
 def completions_with_backoff(**kwargs):
     return openai.ChatCompletion.create(**kwargs)
 
-def gpt(prompt, model="gpt-4", temperature=0.5, max_tokens=1000, n=1, stop=None, api_base=openai.api_base, api_key=openai.api_key) -> list:
+def gpt(prompt, model="gpt-4", temperature=0.9, max_tokens=1000, n=1, stop=None, api_base=openai.api_base, api_key=openai.api_key) -> list:
     messages = [{"role": "user", "content": prompt}]
     return chatgpt(messages, model=model, temperature=temperature, max_tokens=max_tokens, n=n, stop=stop, api_base=api_base, api_key=api_key)
     
