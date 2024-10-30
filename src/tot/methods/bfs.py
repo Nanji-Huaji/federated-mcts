@@ -86,6 +86,11 @@ def get_proposals(task, x, y):
     proposals = gpt(propose_prompt, n=1, stop=None, api_key="lm-studio", api_base="http://127.0.0.1:11451/v1", model="bartowski/Phi-3-medium-128k-instruct-GGUF")[0].split('\n')
     return [y + _ + '\n' for _ in proposals]
 
+def get_proposals_usingLLM(task, x, y): 
+    propose_prompt = task.propose_prompt_wrap(x, y)
+    proposals = gpt(propose_prompt, n=1, stop=None, model='gpt-4o', api_base="https://try-chatgpt.fun/v1", api_key=os.environ.get("OPENAI_API_KEY"))[0].split('\n')
+    return [y + _ + '\n' for _ in proposals]
+
 def get_samples(task, x, y, n_generate_sample, prompt_sample, stop):
     if prompt_sample == 'standard':
         prompt = task.standard_prompt_wrap(x, y)
@@ -94,6 +99,16 @@ def get_samples(task, x, y, n_generate_sample, prompt_sample, stop):
     else:
         raise ValueError(f'prompt_sample {prompt_sample} not recognized')
     samples = gpt(prompt, n=n_generate_sample, stop=stop)
+    return [y + _ for _ in samples]
+
+def get_samples_usingLLM(task, x, y, n_generate_sample, prompt_sample, stop):
+    if prompt_sample == 'standard':
+        prompt = task.standard_prompt_wrap(x, y)
+    elif prompt_sample == 'cot':
+        prompt = task.cot_prompt_wrap(x, y)
+    else:
+        raise ValueError(f'prompt_sample {prompt_sample} not recognized')
+    samples = gpt(prompt, n=n_generate_sample, stop=stop, model='gpt-4o', api_base="https://try-chatgpt.fun/v1", api_key=os.environ.get("OPENAI_API_KEY"))
     return [y + _ for _ in samples]
 
 def solve(args, task, idx, to_print=True):
@@ -106,11 +121,15 @@ def solve(args, task, idx, to_print=True):
     for step in range(task.steps):
         # generation
 
-        # 我们希望可以使用本地的小模型进行生成, 但是评估部分使用大模型.
-        if args.method_generate == 'sample':
+        # 我们希望可以使用本地的小模型进行生成, 但是评估部分使用大模型. 同时，尝试使用大模型完全接管最后几步.
+        if args.method_generate == 'sample' and step < task.steps - 2:
             new_ys = [get_samples(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
-        elif args.method_generate == 'propose':
+        elif args.method_generate == 'propose' and step < task.steps - 2:
             new_ys = [get_proposals(task, x, y) for y in ys]
+        elif args.method_generate == 'sample' and step >= task.steps - 2: 
+            new_ys = [get_samples_usingLLM(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
+        elif args.method_generate == 'propose' and step >= task.steps - 2:
+            new_ys = [get_proposals_usingLLM(task, x, y) for y in ys]
         new_ys = list(itertools.chain(*new_ys))
         ids = list(range(len(new_ys)))
         # evaluation
@@ -138,8 +157,6 @@ def solve(args, task, idx, to_print=True):
         print(ys)
     return ys, {'steps': infos}
 
-
-
 def solve_usingLLM_eval(args, task, idx, to_print=True):
     '''
     This function is used to let LLM process the evaluation part, 
@@ -156,10 +173,14 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
     infos = []
     for step in range(task.steps):
         # generation
-        if args.method_generate == 'sample':
+        if args.method_generate == 'sample' and step < task.steps - 2:
             new_ys = [get_samples(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
-        elif args.method_generate == 'propose':
+        elif args.method_generate == 'propose' and step < task.steps - 2:
             new_ys = [get_proposals(task, x, y) for y in ys]
+        elif args.method_generate == 'sample' and step >= task.steps - 2:
+            new_ys = [get_samples_usingLLM(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
+        elif args.method_generate == 'propose' and step >= task.steps - 2:
+            new_ys = [get_proposals_usingLLM(task, x, y) for y in ys]
         new_ys = list(itertools.chain(*new_ys))
         ids = list(range(len(new_ys)))
         # print(f"这是generation结束处. step={step}, steps={task.steps}.")

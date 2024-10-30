@@ -53,6 +53,7 @@ propose_prompt = '''
 Please imitate the example below and write out the Possible next steps based on the numbers in the Input. 
 Please note: each number can only be used once, and try to avoid generating completely identical operations.
 Please strictly adhere to the following output format and do not output any text other than these formats.
+Please express only the latest steps when stating possible next steps, without repeating the steps that have already been expressed before.
 
 Input: 2 8 8 14
 Possible next steps:
