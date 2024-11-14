@@ -42,7 +42,7 @@ def run(args):
 
 def parse_args():
     args = argparse.ArgumentParser()
-    args.add_argument('--backend', type=str, choices=['gpt-4', 'gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini', 'lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF', 'lmstudio-community/Phi-3.1-mini-128k-instruct-GGUF', 'lmstudio-community/Qwen2.5-7B-Instruct-GGUF', 'lmstudio-community/Qwen2.5-Math-7B-Instruct-GGUF'], default='lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF')
+    args.add_argument('--backend', type=str, choices=['gpt-4', 'gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini', 'bartowski/Phi-3-medium-128k-instruct-GGUF'], default='bartowski/Phi-3-medium-128k-instruct-GGUF')
     args.add_argument('--temperature', type=float, default=0.7)
 
     args.add_argument('--task', type=str, required=True, choices=['game24', 'text', 'crosswords'])

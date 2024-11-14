@@ -13,7 +13,7 @@ This naming method comes from that we use SLM to run tasks.
 The changes are used to let the LLM process **evaluation** part 
 as well as other parts are still handled by SLM.
 
-函数名中的 "*_usingLLM" 表示的是用大模型参与评估部分, 同时用小模型处理其他部分.
+函数名中的 "*_usingLLM" 表示的是用大模型参与处理任务的方法.
 '''
 
 
@@ -177,13 +177,12 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
             new_ys = [get_samples(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
         elif args.method_generate == 'propose' and step < task.steps - 2:
             new_ys = [get_proposals(task, x, y) for y in ys]
-        elif args.method_generate == 'sample' and step >= task.steps - 2:
+        elif args.method_generate == 'sample' and step >= task.steps - 2 or step == 0:
             new_ys = [get_samples_usingLLM(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
-        elif args.method_generate == 'propose' and step >= task.steps - 2:
+        elif args.method_generate == 'propose' and step >= task.steps - 2 or step == 0:
             new_ys = [get_proposals_usingLLM(task, x, y) for y in ys]
         new_ys = list(itertools.chain(*new_ys))
         ids = list(range(len(new_ys)))
-        # print(f"这是generation结束处. step={step}, steps={task.steps}.")
         # evaluation
         if args.method_evaluate == 'vote':
             values = get_votes_usingLLM(task, x, new_ys, args.n_evaluate_sample)

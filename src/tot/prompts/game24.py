@@ -49,12 +49,15 @@ Input: {input}
 '''
 
 # 1-shot
+# 等待修改
 propose_prompt = '''
-Please imitate the example below and write out the Possible next steps based on the numbers in the Input. 
+Now we are going to use the input to play game of 24. Please imitate the example below and write out the Possible next steps based on the numbers in the Input. 
 Please note: each number can only be used once, and try to avoid generating completely identical operations.
 Please strictly adhere to the following output format and do not output any text other than these formats.
 Please express only the latest steps when stating possible next steps, without repeating the steps that have already been expressed before.
-
+Please do not forget that after two numbers are operated on, what remains is and only is the result of their operation.
+Please note that each possible next step is independent of one another.
+If the given input has already reached 24, please do not perform any operations and directly output the original input.
 Input: 2 8 8 14
 Possible next steps:
 2 + 8 = 10 (left: 8 10 14)
@@ -68,6 +71,30 @@ Possible next steps:
 Input: {input}
 Possible next steps:
 '''
+
+propose_prompt_backup = '''
+Let's play the game of 24 with the given numbers using arithmetic operations to reach 24. Follow these guidelines:
+1. Use each number exactly once and create unique operations.
+2. Stick to the output format provided, with no additional text.
+3. List only the most recent steps, avoiding repetition.
+4. Remember, after operating on two numbers, only the result of that operation remains.
+5. Each next step is independent.
+Input: 2 8 8 14
+Possible next steps:
+2 + 8 = 10 (left: 8 10 14)
+8 / 2 = 4 (left: 4 8 14)
+14 + 2 = 16 (left: 8 8 16)
+2 * 8 = 16 (left: 8 14 16)
+8 - 2 = 6 (left: 6 8 14)
+14 - 8 = 6 (left: 2 6 8)
+14 /  2 = 7 (left: 7 8 8)
+14 - 2 = 12 (left: 8 8 12)
+Input: {input}
+Possible next steps:
+'''
+
+# 小模型的生成能力问题不大，主要是要修改评估部分。
+# 对value_prompt进行修改。
 
 value_prompt = '''Evaluate if given numbers can reach 24 (sure/likely/impossible). Please do not restate the question, do not derive in any way other than the following example.
 10 14
@@ -87,11 +114,25 @@ sure
 4 9 11
 9 + 11 + 4 = 20 + 4 = 24
 sure
-5 7 8
-5 + 7 + 8 = 12 + 8 = 20
-(8 - 5) * 7 = 3 * 7 = 21
-I cannot obtain 24 now, but numbers are within a reasonable range
-likely
+1 * 3 = 3 (left: 1 2 8)
+(1 + 2) * 8 = 24 
+sure
+1 * 3 = 3 (left: 1 2 8)\n1 + 2 = 3 (left: 3 8)\n
+3 * 8 = 24
+sure
+8 / 1 = 8 (left: 1 2 8)\n1 + 2 = 3 (left: 3 8)\n
+3 * 8 = 24
+sure
+1 * 1 = 1 (left: 1 1 8)\n   1 * 8 = 8 (left: 1 2 8)\n2 / 1 = 2 (left: 6 2)\n\n\n6 * 2 = 12 (left: 4 12)\n12 - 4 = 8 (left: 4 8 12)
+4 + 8 + 12 = 24
+sure
+1 * 1 = 1 (left: 1 1 8)\n   1 * 8 = 8 (left: 1 2 8)\n2 / 1 = 2 (left: 6 2)\n\n\n6 * 2 = 12 (left: 4 12)\n12 / 4 = 3 (left: 3 4 12)
+12 + 3 * 4 = 24
+sure
+1 + 1 = 2 (left: 1 1 8 2)\n   8 / 1 = 8 (left: 1 2 8)\n\n1 + 2 = 3 (left: 3 8)\n3 * 8 = 24 (left: 24)\n
+sure
+4 * 5 = 20 (left: 6 10 20)\n20 + 10 = 30 (left: 6 30)\n30 - 6 = 24 (left: 0)
+sure
 5 6 6
 5 + 6 + 6 = 17
 (6 - 5) * 6 = 1 * 6 = 6
@@ -106,6 +147,15 @@ impossible
 1 * 3 * 3 = 9
 (1 + 3) * 3 = 12
 1 3 3 are all too small
+impossible
+8 - 1 = 7 (left: 1 2 7)\n7 - 1 = 6 (left: 2 6)\n
+2, 6 are too small
+impossible
+8 / 1 = 8 (left: 1 2 8)\n8 / 1 = 8 (left: 2 8)\n8 - 2 = 6 (left: 6, 8)
+6 + 8 = 14
+6 * 8 = 48
+8 - 6 = 2
+8 / 6 = 1.33
 impossible
 {input}
 '''
@@ -138,3 +188,6 @@ impossible
 Input: {input}
 Answer: {answer}
 Judge:'''
+
+correction_prompt = '''
+'''

@@ -33,7 +33,7 @@ class Game24Task(Task):
         self.data = list(pd.read_csv(path)['Puzzles'])
         self.value_cache = {}
         # self.steps = 4
-        self.steps = 8 # "Steps" is changed for future experiments. Original value is 4.
+        self.steps = 6 # "Steps" is changed for future experiments. Original value is 4.
         self.stops = ['\n'] * 4
 
     def __len__(self) -> int:
@@ -91,3 +91,7 @@ class Game24Task(Task):
         value_map = {'impossible': 0.001, 'likely': 1, 'sure': 20}  # TODO: ad hoc
         value = sum(value * value_names.count(name) for name, value in value_map.items())
         return value
+    
+    @staticmethod
+    def using_LLM_correction(x: str, y: str, value_outputs: list) -> str:
+        pass
