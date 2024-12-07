@@ -4,6 +4,7 @@ from functools import partial
 from tot.models import gpt
 import os, re
 from tot.pattern_match import check_and_fix_last_line
+import time
 
 LLM_completion_token = 0
 LLM_prompt_token = 0
@@ -65,7 +66,7 @@ def get_value_usingLLM(task, x, y, n_evaluate_sample, cache_value=True):
     return value
 
 
-def get_values(task, x, ys, n_evaluate_sample, cache_value=True):
+def get_values(args, task, x, ys, n_evaluate_sample, cache_value=True):
     values = []
     local_value_cache = {}
     for y in ys:  # each partial output
@@ -74,13 +75,14 @@ def get_values(task, x, ys, n_evaluate_sample, cache_value=True):
         else:
             # jinyu
             value = 0
-            if "(left: 24)" in y:
-                value = 20 + 1
-            else:
-                for pat in pattern:
-                    if pat in y:
-                        value = 20
-                        break
+            if args.eval_rule==True:  # get the value with some rules
+                if "(left: 24)" in y:
+                    value = 20 + 1
+                else:
+                    for pat in pattern:
+                        if pat in y:
+                            value = 20
+                            break
             if value == 0:
                 value = get_value(
                     task, x, y, n_evaluate_sample, cache_value=cache_value
@@ -90,7 +92,7 @@ def get_values(task, x, ys, n_evaluate_sample, cache_value=True):
     return values
 
 
-def get_values_usingLLM(task, x, ys, n_evaluate_sample, cache_value=True):
+def get_values_usingLLM(args, task, x, ys, n_evaluate_sample, cache_value=True):
     values = []
     local_value_cache = {}
     for y in ys:  # each partial output
@@ -99,13 +101,14 @@ def get_values_usingLLM(task, x, ys, n_evaluate_sample, cache_value=True):
         else:
             # jinyu
             value = 0
-            if "(left: 24)" in y:
-                value = 20 + 1
-            else:
-                for pat in pattern:
-                    if pat in y:
-                        value = 20
-                        break
+            if args.eval_rule==True:  # get the value with some rules
+                if "(left: 24)" in y:
+                    value = 20 + 1
+                else:
+                    for pat in pattern:
+                        if pat in y:
+                            value = 20
+                            break
             if value == 0:
                 value = get_value_usingLLM(
                     task, x, y, n_evaluate_sample, cache_value=cache_value
@@ -137,15 +140,13 @@ def get_votes_usingLLM(task, x, ys, n_evaluate_sample):
     return values
 
 
-def get_proposals(task, x, y):
+def get_proposals(args, task, x, y):
     # jinyu:
     if "(left: 24)" in y:  # no need to generate new proposals
         return [y]
-    new_proposal_list, run_times, time_constraint = [], 0, 6
+    new_proposal_list, run_times, time_constraint = [], 0, 3
 
-    while (
-        len(new_proposal_list) < 4 and run_times < time_constraint
-    ):  # Generate at least 4 proposes
+    while (len(new_proposal_list) < 3 and run_times < time_constraint):  # Generate at least 4 proposes
 
         last_prompt, propose_prompt = task.propose_prompt_wrap(x, y)
         proposals = gpt(
@@ -162,10 +163,13 @@ def get_proposals(task, x, y):
         for pro in proposals:
             if pro.strip() == "":
                 continue
-            pro = pro.strip()
             pro = re.sub(r"^[^0-9]+|[^0-9)]+$", "", pro)
-            new_proposal = y + pro + "\n"
-            if last_prompt:
+            pro = pro.strip()
+            if(pro!=''):
+                new_proposal = y + pro + "\n"
+            else:
+                new_proposal = y
+            if last_prompt or args.check_format==False:
                 is_correct, updated_new_proposal = True, new_proposal
             else:
                 is_correct, updated_new_proposal = check_and_fix_last_line(
@@ -185,36 +189,43 @@ def get_proposals(task, x, y):
     return new_proposal_list
 
 
-def get_proposals_usingLLM(task, x, y):
+def get_proposals_usingLLM(args, task, x, y):
     if "(left: 24)" in y:
         return [y]
+    
+    new_proposal_list, run_times, time_constraint = [], 0, 3
 
-    last_prompt, propose_prompt = task.propose_prompt_wrap(x, y)
-    proposals = gpt(
-        propose_prompt,
-        n=1,
-        stop=None,
-        model="gpt-4o",
-        api_base="https://try-chatgpt.fun/v1",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-    )[0].split("\n")
-    # return [y + _ + '\n' for _ in proposals]
+    while (len(new_proposal_list) < 4 and run_times < time_constraint):
+        last_prompt, propose_prompt = task.propose_prompt_wrap(x, y)
+        proposals = gpt(
+            propose_prompt,
+            n=1,
+            stop=None,
+            model="gpt-4o",
+            api_base="https://try-chatgpt.fun/v1",
+            api_key=os.environ.get("OPENAI_API_KEY"),
+        )[0].split("\n")
+        # return [y + _ + '\n' for _ in proposals]
 
-    # jinyu: Check results
-    new_proposal_list = []
-    for pro in proposals:
-        pro = pro.strip()
-        pro = re.sub(r"^[^0-9]+|[^0-9)]+$", "", pro)
-        new_proposal = y + pro + "\n"
-        if last_prompt:
-            is_correct, updated_new_proposal = True, new_proposal
-        else:
-            is_correct, updated_new_proposal = check_and_fix_last_line(new_proposal, x)
-        if is_correct:  # or we can directly set Ture
-            if updated_new_proposal not in new_proposal_list:
-                new_proposal_list.append(updated_new_proposal)
+        # jinyu: Check results
+        for pro in proposals:
+            pro = re.sub(r"^[^0-9]+|[^0-9)]+$", "", pro) # Match the start and end
+            pro = pro.strip()
+            if(pro!=''):
+                new_proposal = y + pro + "\n"
+            else:
+                new_proposal = y
+            if last_prompt or args.check_format==False: # Do not check the format
+                is_correct, updated_new_proposal = True, new_proposal
+            else:
+                is_correct, updated_new_proposal = check_and_fix_last_line(new_proposal, x)
+            if is_correct:  # or we can directly set Ture
+                if updated_new_proposal not in new_proposal_list:
+                    new_proposal_list.append(updated_new_proposal)
         if last_prompt:
             break
+        run_times += 1
+
     return new_proposal_list
 
 
@@ -349,44 +360,46 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
     x = task.get_input(idx)  # input
     ys = [""]  # current output candidates
     infos = []
+
+    lat_all, lat_generate, lat_eval, lat_select = [], [], [], []
+
     for step in range(task.steps):
+        step_start_time = time.time()
+
         # generation
-        if args.method_generate == "sample" and step != 0:
-            new_ys = [
-                get_samples(
-                    task,
-                    x,
-                    y,
-                    args.n_generate_sample,
-                    prompt_sample=args.prompt_sample,
-                    stop=task.stops[step],
-                )
-                for y in ys
-            ]
-        elif args.method_generate == "propose" and step != 0:  # step != 0
-            new_ys = [get_proposals(task, x, y) for y in ys]
-        elif args.method_generate == "sample" and step == 0:
-            new_ys = [
-                get_samples_usingLLM(
-                    task,
-                    x,
-                    y,
-                    args.n_generate_sample,
-                    prompt_sample=args.prompt_sample,
-                    stop=task.stops[step],
-                )
-                for y in ys
-            ]
-        elif args.method_generate == "propose" and step == 0:  # step == 0
-            new_ys = [get_proposals_usingLLM(task, x, y) for y in ys]
+        gen_start_time = time.time()
+        if args.method_generate == "sample" and args.slm_generate and (step != 0 and args.warm_start==True or args.warm_start==False):
+            new_ys = [get_samples(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
+        elif args.method_generate == "propose" and args.slm_generate and (step != 0 and args.warm_start==True or args.warm_start==False):
+            new_ys = [get_proposals(args, task, x, y) for y in ys]
+        elif args.method_generate == "sample":  # Always use the large model at step 0 
+            new_ys = [get_samples_usingLLM(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]) for y in ys]
+        elif args.method_generate == "propose":
+            new_ys = [get_proposals_usingLLM(args, task, x, y) for y in ys]
+        else:
+            raise Exception('Not match!')
         new_ys = list(itertools.chain(*new_ys))
         ids = list(range(len(new_ys)))
+        gen_end_time = time.time()  
+        lat_generate.append(gen_end_time - gen_start_time)
+
         # evaluation
-        if args.method_evaluate == "vote":
+        eval_start_time = time.time()
+        if args.method_evaluate == "vote" and args.slm_eval:
+            values = get_votes(task, x, new_ys, args.n_evaluate_sample)
+        elif args.method_evaluate == "value" and args.slm_eval:
+            values = get_values(args, task, x, new_ys, args.n_evaluate_sample)
+        elif args.method_evaluate == "vote":
             values = get_votes_usingLLM(task, x, new_ys, args.n_evaluate_sample)
         elif args.method_evaluate == "value":
-            values = get_values_usingLLM(task, x, new_ys, args.n_evaluate_sample)
+            values = get_values_usingLLM(args, task, x, new_ys, args.n_evaluate_sample)
+        else:
+            raise Exception('Not match!')
+        eval_end_time = time.time() 
+        lat_eval.append(eval_end_time - eval_start_time)
+
         # selection
+        sel_start_time = time.time()
         if args.method_select == "sample":
             ps = np.array(values) / sum(values)
             select_ids = np.random.choice(ids, size=args.n_select_sample, p=ps).tolist()
@@ -395,6 +408,9 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
                 : args.n_select_sample
             ]
         select_new_ys = [new_ys[select_id] for select_id in select_ids]
+        sel_end_time = time.time()  
+        lat_select.append(sel_end_time - sel_start_time)
+
         # log
         if to_print:
             sorted_new_ys, sorted_values = zip(
@@ -415,16 +431,20 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
             }
         )
         ys = select_new_ys
-        end = False
-        for i in ys:
-            if "(left: 24)" in i:
-                end = True
-                break
+        # end = False
+        # for i in ys:
+        #     if "(left: 24)" in i:
+        #         end = True
+        #         break
         # if(end):
         #     break
+        step_end_time = time.time()
+        lat_all.append(step_end_time - step_start_time)
+
     if to_print:
         print(ys)
-    return ys, {"steps": infos}
+    lat_dict = {'all': lat_all, 'generate': lat_generate, 'eval': lat_eval}
+    return ys, {"steps": infos}, lat_dict
 
 
 def naive_solve(args, task, idx, to_print=True):

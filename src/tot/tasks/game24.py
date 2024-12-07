@@ -5,6 +5,7 @@ import pandas as pd
 from tot.tasks.base import Task, DATA_PATH
 from tot.prompts.game24 import *
 from tot.models import gpt
+from tot.pattern_match import check_final_result
 
 
 def get_current_numbers(y: str) -> str:
@@ -47,7 +48,23 @@ class Game24Task(Task):
         return self.data[idx]
 
     def test_output_modfiy(self, idx: int, output: str):
-        return {"r": "(left: 24)" in output}
+        problem_numbers = re.findall(r"\d+", self.data[idx])
+        x = problem_numbers[0] + ' ' + problem_numbers[1] + ' ' + problem_numbers[2] + ' ' + problem_numbers[3]
+        split_output = output.split('\n')
+        output_list = list(filter(None, split_output))
+        new_output = ''
+        for idx_o, line in enumerate(output_list):
+            if(idx_o==0): 
+                correct, cali_output = check_final_result(line, x=x)
+            else:
+                correct, cali_output = check_final_result(line, output_list[idx_o-1])
+            if(correct==False):
+                return {"r": 0}, output
+            new_output = new_output + cali_output + '\n'
+        if "(left: 24)" in output:
+            return {"r": 1}, new_output
+        else:
+            return {"r": 0}, new_output
 
     def test_output(self, idx: int, output: str):
         expression = (

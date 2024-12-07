@@ -10,11 +10,26 @@
 
 
 import re
-import sympy
-def test_output(idx: int, output: str):
-    return {'r': '(left: 24)' in output}
+from tot.pattern_match import check_final_result
+def test_output_modfiy(idx: int, output: str):
+    problem_numbers = ['1','1','4','6']
+    x = problem_numbers[0] + ' ' + problem_numbers[1] + ' ' + problem_numbers[2] + ' ' + problem_numbers[3]
+    split_output = output.split('\n')
+    output_list = list(filter(None, split_output))
+    new_output = ''
+    for idx, line in enumerate(output_list):
+        if(idx==0): 
+            correct, cali_output = check_final_result(line, x=x)
+        else:
+            correct, cali_output = check_final_result(line, output_list[idx-1])
+        if(correct==False):
+            return {"r": 0}, output
+        new_output = new_output + '\n' + cali_output
+    if "(left: 24)" in output:
+        return {"r": 1}, new_output
+    else:
+        return {"r": 0}, new_output
 
-ys = ['8 - 1 = 7 (left: 1 3 7)\n1 + 7 = 8 (left: 3 8)\n3 * 8 = 24 (left: 24)\n', '3 * 8 = 24 (left: 1 1 24)\n1 * 24 = 24 (left: 1 24)\n24 * 1 = 24 (left: 24)\n', '3 * 8 = 24 (left: 1 1 24)\n1 * 24 = 24 (left: 1 24)\n24 / 1 = 24 (left: 24)\n', '3 * 8 = 24 (left: 1 1 24)\n1 * 24 = 24 (left: 1 24)\n1 * 24 = 24 (left: 24)\n', '\n3 * 8 = 24 (left: 1 1 24)\n1 * 1 = 1 (left: 1 24)\n1 * 24 = 24 (left: 24)\n']
-a = test_output(2, '111')
-print(a)
-        
+text = "6 / 1 = 6 (left: 1 4 6)\n6 / 1 = 6 (left: 4 6)\n4 * 6 = 24 (left: 24)\n"
+a,b = test_output_modfiy(1, text)
+print(a,b)

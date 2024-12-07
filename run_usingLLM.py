@@ -12,45 +12,72 @@ import openai
 def run(args):
     task = get_task(args.task)
     logs, cnt_avg, cnt_any = [], 0, 0
+    lat_all, lat_generate, lat_eval = 0, 0, 0
     if args.naive_run:
-        file = f"./logs/{args.task}/{args.backend}_{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM.json"
+        file = f"./logs/{args.task}/{args.backend}_{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
     else:
-        file = f"./logs/{args.task}/{args.backend}_{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM.json"
-    os.makedirs(os.path.dirname(file), exist_ok=True)
+        file = f"./logs/{args.task}/{args.backend}_{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_idx_{args.inference_idx}"
+    os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
 
     for i in range(args.task_start_index, args.task_end_index):
         # solve
         if args.naive_run:
             ys, info = naive_solve(args, task, i)
         else:
-            ys, info = solve_usingLLM_eval(args, task, i)
+            ys, info, lat_dict = solve_usingLLM_eval(args, task, i)
 
         print(f"task.step为{task.steps}.")
 
         # log
         print("ys ", ys)
-        infos = [task.test_output_modfiy(i, y) for y in ys]
+        infos, output_list = [], []
+        for y in ys:
+            r, new_output = task.test_output_modfiy(i, y)
+            if(new_output not in output_list):  # Avoid duplication of outputs
+                output_list.append(new_output)
+            else:
+                r = {"r": 0}  # Do not count twice
+            infos.append(r)
+        token_consumption = gpt_usage(args.backend)
         info.update(
             {
                 "idx": i,
                 "ys": ys,
                 "infos": infos,
-                "usage_so_far": gpt_usage(args.backend),
+                "usage_so_far": token_consumption,
             }
         )
+        info.update(lat_dict)  # jinyu: update the latency
+        lat_all, lat_generate, lat_eval = (
+            lat_all + sum(lat_dict["all"]),
+            lat_generate + sum(lat_dict["generate"]),
+            lat_eval + sum(lat_dict["eval"]),
+        )
         logs.append(info)
-        with open(file, "w") as f:
+        with open(file + ".json", "w") as f:
             json.dump(logs, f, indent=4)
 
         # log main metric
         accs = [info["r"] for info in infos]
-        cnt_avg += sum(accs) / len(accs)
+        cnt_avg += sum(accs)  # / len(accs) #jinyu: counting the sum
         cnt_any += any(accs)
         print(i, "sum(accs)", sum(accs), "cnt_avg", cnt_avg, "cnt_any", cnt_any, "\n")
 
     n = args.task_end_index - args.task_start_index
-    print("The diversity accuracy is ", cnt_avg / n, ". The accuracy is: ", cnt_any / n)
-    print("usage_so_far", gpt_usage(args.backend))
+    print("The average sum is ", cnt_avg / n, ". The accuracy is: ", cnt_any / n)
+    print("Token consumption: ", token_consumption)
+    print("Latency: ", lat_all, ", ", lat_generate, ", ", lat_eval)
+    res_json = {
+        "avg_sum": cnt_avg / n,
+        "acc": cnt_any / n,
+        "lat": lat_all,
+        "lat_generate": lat_generate,
+        "lat_eval": lat_eval,
+    }
+    res_json.update(token_consumption)
+
+    with open(file + "_performance.json", "w") as f:
+        json.dump(res_json, f, indent=4)
 
 
 def parse_args():
@@ -92,6 +119,30 @@ def parse_args():
     args.add_argument("--n_evaluate_sample", type=int, default=1)
     args.add_argument("--n_select_sample", type=int, default=1)
 
+    # jinyu
+    args.add_argument(
+        "--slm_generate", action="store_true", help="use small lm for generation"
+    )
+    args.add_argument(
+        "--slm_eval", action="store_true", help="use small lm for evaluation"
+    )
+    args.add_argument(
+        "--check_format",
+        action="store_true",
+        help="check the format and correctness of the generated contents",
+    )
+    args.add_argument(
+        "--eval_rule", action="store_true", help="use rules for evaluation"
+    )
+    args.add_argument(
+        "--warm_start",
+        action="store_true",
+        help="step 0 uses large model for generation",
+    )
+    args.add_argument(
+        "--inference_idx", type=int, default=0, help="Do multiple experiments"
+    )
+
     args = args.parse_args()
     return args
 
@@ -101,5 +152,3 @@ if __name__ == "__main__":
     print(args)
     print(f"api_key为{openai.api_key}, api_base为{openai.api_base}.")
     run(args)
-
-    # --task game24 --task_start_index 900 --task_end_index 1000 --method_generate propose --method_evaluate value --method_select greedy --n_evaluate_sample 3 --n_select_sample 5
