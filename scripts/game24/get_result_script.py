@@ -10,7 +10,8 @@ base_command = [
     "--method_select", "greedy",
     "--n_evaluate_sample", "3",
     "--n_select_sample", "5",
-    "--temperature", "0.9"
+    "--temperature", "0.9",
+    "--localbackend", "phi-3.1-mini-128k-instruct",
 ]
 add_command = [
     "--slm_generate",
@@ -24,14 +25,12 @@ python_command_res = [
 ]
 
 command_list = [
-    python_command_res + base_command + ["--slm_generate", "--slm_eval"], # pure small model
-    python_command_res + base_command, # pure large model
-    python_command_res + base_command + ["--slm_generate"], # small-large model collaboration
-    python_command_res + base_command + ["--slm_generate", "--check_format"],
-    python_command_res + base_command + ["--slm_generate", "--check_format","--eval_rule"],
-    python_command_res + base_command + ["--slm_generate", "--check_format","--eval_rule","--warm_start"],
-    python_command_res + base_command + ["--slm_generate", "--slm_eval", "--check_format","--eval_rule","--warm_start"],
-    python_command_res + base_command + ["--check_format","--eval_rule"]
+    python_command_res + base_command + ["--slm_generate", "--slm_eval", "--check_format","--eval_rule"],
+    python_command_res + base_command + ["--slm_generate", "--slm_eval", "--check_format","--eval_rule","--last_lm"],
+    python_command_res + base_command + ["--slm_generate", "--check_format","--eval_rule","--last_lm"],
+    python_command_res + base_command + ["--slm_eval", "--check_format","--eval_rule"],
+    python_command_res + base_command + ["--check_format","--eval_rule"],
+    python_command_res + base_command + ["--filter","--last_lm"]
 ]
 
 # Loop --inference_idx from 0-2

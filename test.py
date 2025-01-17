@@ -8,28 +8,21 @@
 # ys, infos = solve(args, task, 900)
 # print(ys[0])
 
-
 import re
-from tot.pattern_match import check_final_result
-def test_output_modfiy(idx: int, output: str):
-    problem_numbers = ['1','1','4','6']
-    x = problem_numbers[0] + ' ' + problem_numbers[1] + ' ' + problem_numbers[2] + ' ' + problem_numbers[3]
-    split_output = output.split('\n')
-    output_list = list(filter(None, split_output))
-    new_output = ''
-    for idx, line in enumerate(output_list):
-        if(idx==0): 
-            correct, cali_output = check_final_result(line, x=x)
-        else:
-            correct, cali_output = check_final_result(line, output_list[idx-1])
-        if(correct==False):
-            return {"r": 0}, output
-        new_output = new_output + '\n' + cali_output
-    if "(left: 24)" in output:
-        return {"r": 1}, new_output
-    else:
-        return {"r": 0}, new_output
+pattern = r"\(left: \d+\)"
+    
+# 使用re.search检查是否匹配
+text = '(left: 24)'
+match = re.search(pattern, text)
+if match:
+    print(text)
 
-text = "6 / 1 = 6 (left: 1 4 6)\n6 / 1 = 6 (left: 4 6)\n4 * 6 = 24 (left: 24)\n"
-a,b = test_output_modfiy(1, text)
-print(a,b)
+text = '(left: 24 16)'
+match = re.search(pattern, text)
+if match:
+    print(text)
+
+text = '(left: a)'
+match = re.search(pattern, text)
+if match:
+    print(text)

@@ -6,7 +6,7 @@ from tot.tasks.base import Task, DATA_PATH
 from tot.prompts.game24 import *
 from tot.models import gpt
 from tot.pattern_match import check_final_result
-
+from tot.pattern_match import check_and_fix_last_line
 
 def get_current_numbers(y: str) -> str:
     last_line = y.strip().split("\n")[-1]
@@ -35,10 +35,10 @@ class Game24Task(Task):
         path = os.path.join(DATA_PATH, "24", file)
         self.data = list(pd.read_csv(path)["Puzzles"])
         self.value_cache = {}
-        # self.steps = 4
-        self.steps = (
-            6  # "Steps" is changed for future experiments. Original value is 4.
-        )
+        self.steps = 2 # for temporary testing
+        # self.steps = (
+        #     6  # "Steps" is changed for future experiments. Original value is 4.
+        # )
         self.stops = ["\n"] * 4
 
     def __len__(self) -> int:
@@ -49,18 +49,26 @@ class Game24Task(Task):
 
     def test_output_modfiy(self, idx: int, output: str):
         problem_numbers = re.findall(r"\d+", self.data[idx])
-        x = problem_numbers[0] + ' ' + problem_numbers[1] + ' ' + problem_numbers[2] + ' ' + problem_numbers[3]
-        split_output = output.split('\n')
+        x = (
+            problem_numbers[0]
+            + " "
+            + problem_numbers[1]
+            + " "
+            + problem_numbers[2]
+            + " "
+            + problem_numbers[3]
+        )
+        split_output = output.split("\n")
         output_list = list(filter(None, split_output))
-        new_output = ''
+        new_output = ""
         for idx_o, line in enumerate(output_list):
-            if(idx_o==0): 
+            if idx_o == 0:
                 correct, cali_output = check_final_result(line, x=x)
             else:
-                correct, cali_output = check_final_result(line, output_list[idx_o-1])
-            if(correct==False):
+                correct, cali_output = check_final_result(line, output_list[idx_o - 1])
+            if correct == False:
                 return {"r": 0}, output
-            new_output = new_output + cali_output + '\n'
+            new_output = new_output + cali_output + "\n"
         if "(left: 24)" in output:
             return {"r": 1}, new_output
         else:
@@ -90,7 +98,7 @@ class Game24Task(Task):
             n=1,
             stop=None,
             model="gpt-4o",
-            api_base="https://try-chatgpt.fun/v1",
+            api_base="https://try-chatapi.com/v1",
             api_key=os.environ.get("OPENAI_API_KEY"),
         )[0]
         return result
@@ -108,12 +116,17 @@ class Game24Task(Task):
         current_numbers = get_current_numbers(y if y else x)
         if current_numbers == "24":
             prompt = cot_prompt.format(input=x) + "Steps:" + y
-            last_prompt = True
             # print([prompt])
         else:
-            prompt = propose_prompt.format(input=current_numbers)
-            last_prompt = False
-        return last_prompt, prompt
+            #prompt = propose_prompt.format(input=current_numbers)
+            numbers = current_numbers.split(" ")
+            if len(numbers) == 2:
+                prompt = propose_prompt_backup_s2.format(input=current_numbers)
+            if len(numbers) == 3:
+                prompt = propose_prompt_backup_s1.format(input=current_numbers)
+            else:
+                prompt = propose_prompt_backup_s0.format(input=current_numbers)
+        return prompt
 
     @staticmethod
     def value_prompt_wrap(x: str, y: str) -> str:
@@ -131,11 +144,60 @@ class Game24Task(Task):
 
     @staticmethod
     def value_outputs_unwrap(x: str, y: str, value_outputs: list) -> float:
-        if len(y.strip().split("\n")) == 4 and "answer" not in y.lower():
-            return 0
+        # if len(y.strip().split("\n")) == 4 and "answer" not in y.lower():
+        #     return 0
         value_names = [_.split("\n")[-1] for _ in value_outputs]
         value_map = {"impossible": 0.001, "likely": 1, "sure": 20}  # TODO: ad hoc
         value = sum(
             value * value_names.count(name) for name, value in value_map.items()
         )
         return value
+
+    @staticmethod
+    def pre_generate_check(y): # Whether it needs to generate
+        pattern_final = r"\(left: -?\d+\)"
+        if re.search(pattern_final, y):  # reach the final step, no need to generate new proposals
+            return False
+        return True
+
+    @staticmethod
+    def process_generate_result(pro, x, y, check_format):
+        if pro.strip() == "":
+            return False, pro
+        pro = re.sub(r"^[^0-9]+|[^0-9)]+$", "", pro)
+        pro = pro.strip()
+        if pro != "":
+            new_proposal = y + pro + "\n"
+        else:
+            new_proposal = y
+        if check_format == False:
+            is_correct, updated_new_proposal = True, new_proposal
+        else:
+            is_correct, updated_new_proposal = check_and_fix_last_line(new_proposal, x)
+        return is_correct, updated_new_proposal
+    
+    @staticmethod
+    def pre_value_check(y, eval_rule): # Whether it needs to generate the value
+        pattern = [
+            "(left: 1 24)",
+            "(left: 2 12)",
+            "(left: 3 8)",
+            "(left: 4 6)",
+            "(left: 4 20)",
+            "(left: 6 30)",
+            "(left: 12 12)",
+        ]
+
+        pattern_final = r"\(left: -?\d+\)"
+        value, final = 0, False
+        if eval_rule == True:  # get the value with some rules
+            if "(left: 24)" in y:
+                value = 20 + 2
+            elif re.search(pattern_final, y):
+                final = True
+            else:
+                for pat in pattern:
+                    if pat in y:
+                        value = 20 + 1
+                        break
+        return value, final

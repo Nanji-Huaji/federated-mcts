@@ -28,6 +28,7 @@ def completions_with_backoff(**kwargs):
 
 
 def gpt(
+    args,
     prompt,
     model="gpt-4",
     temperature=0.9,
@@ -39,6 +40,7 @@ def gpt(
 ) -> list:
     messages = [{"role": "user", "content": prompt}]
     return chatgpt(
+        args,
         messages,
         model=model,
         temperature=temperature,
@@ -51,6 +53,7 @@ def gpt(
 
 
 def chatgpt(
+    args,
     messages,
     model="gpt-4",
     temperature=0.5,
@@ -79,7 +82,7 @@ def chatgpt(
         # log completion tokens
         completion_tokens += res["usage"]["completion_tokens"]
         prompt_tokens += res["usage"]["prompt_tokens"]
-        if model == "gpt-4o":
+        if model == args.remotebackend:
             llm_completion_tokens += res["usage"]["completion_tokens"]
             llm_prompt_tokens += res["usage"]["prompt_tokens"]
         else:

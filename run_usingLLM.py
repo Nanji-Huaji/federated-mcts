@@ -3,7 +3,7 @@ import json
 import argparse
 
 from tot.tasks import get_task
-from tot.methods.bfs import solve, naive_solve, solve_usingLLM_eval
+from tot.methods.bfs import naive_solve, solve_usingLLM_eval
 from tot.models import gpt_usage
 
 import openai
@@ -14,12 +14,13 @@ def run(args):
     logs, cnt_avg, cnt_any = [], 0, 0
     lat_all, lat_generate, lat_eval = 0, 0, 0
     if args.naive_run:
-        file = f"./logs/{args.task}/{args.backend}_{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
+        file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
     else:
-        file = f"./logs/{args.task}/{args.backend}_{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_idx_{args.inference_idx}"
+        file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
 
     for i in range(args.task_start_index, args.task_end_index):
+        print('Solve task ', i)
         # solve
         if args.naive_run:
             ys, info = naive_solve(args, task, i)
@@ -38,7 +39,7 @@ def run(args):
             else:
                 r = {"r": 0}  # Do not count twice
             infos.append(r)
-        token_consumption = gpt_usage(args.backend)
+        token_consumption = gpt_usage(args.localbackend)
         info.update(
             {
                 "idx": i,
@@ -73,6 +74,8 @@ def run(args):
         "lat": lat_all,
         "lat_generate": lat_generate,
         "lat_eval": lat_eval,
+        "sm": args.localbackend,
+        "llm": args.remotebackend
     }
     res_json.update(token_consumption)
 
@@ -83,7 +86,7 @@ def run(args):
 def parse_args():
     args = argparse.ArgumentParser()
     args.add_argument(
-        "--backend",
+        "--localbackend",
         type=str,
         choices=[
             "gpt-4",
@@ -92,8 +95,27 @@ def parse_args():
             "gpt-4o-mini",
             "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
             "bartowski/Phi-3-medium-128k-instruct-GGUF",
+            "meta-llama-3.1-8b-instruct@q4_k_m",
+            "Qwen/Qwen2.5-32B-Instruct-GGUF",
+            "phi-3.1-mini-128k-instruct",
         ],
         default="bartowski/Phi-3-medium-128k-instruct-GGUF",
+    )
+    args.add_argument(
+        "--remotebackend",
+        type=str,
+        choices=[
+            "gpt-4",
+            "gpt-3.5-turbo",
+            "gpt-4o",
+            "gpt-4o-mini",
+            "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
+            "bartowski/Phi-3-medium-128k-instruct-GGUF",
+            "meta-llama-3.1-8b-instruct@q4_k_m",
+            "Qwen/Qwen2.5-32B-Instruct-GGUF",
+            "qwen2.5-32b-instruct"
+        ],
+        default="qwen2.5-32b-instruct",
     )
     args.add_argument("--temperature", type=float, default=0.9)
 
@@ -142,6 +164,11 @@ def parse_args():
     args.add_argument(
         "--inference_idx", type=int, default=0, help="Do multiple experiments"
     )
+    args.add_argument(
+        "--last_lm", action="store_true", help="Use the large model for the last step"
+    )
+
+    args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
 
     args = args.parse_args()
     return args

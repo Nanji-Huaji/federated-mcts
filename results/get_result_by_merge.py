@@ -38,7 +38,7 @@ def calculate_success_time(file_slm, file_llm):
         llm_infos = llm.get("infos", None)
         slm_res, llm_res = check_r_value(slm_infos), check_r_value(llm_infos)
         if slm_res or llm_res:
-            success_time += 1 # 成功次数在两个模型至少有一个成功的时候加一
+            success_time += 1  # 成功次数在两个模型至少有一个成功的时候加一
         if slm_res and llm_res:
             both_ture += 1
         elif slm_res:
@@ -52,13 +52,29 @@ def calculate_success_time(file_slm, file_llm):
         llm_ys = llm.get("ys", None)
         accurate_res = []
         for idx in range(max(len(slm_ys), len(llm_ys))):
-            if idx < len(slm_ys) and idx < len(slm_infos) and slm_infos[idx]["r"]==1 and slm_ys[idx] not in accurate_res:
+            if (
+                idx < len(slm_ys)
+                and idx < len(slm_infos)
+                and slm_infos[idx]["r"] == 1
+                and slm_ys[idx] not in accurate_res
+            ):
                 success_sum += 1
-            if idx < len(llm_ys) and idx < len(llm_infos) and llm_infos[idx]["r"]==1 and llm_ys[idx] not in accurate_res:
+            if (
+                idx < len(llm_ys)
+                and idx < len(llm_infos)
+                and llm_infos[idx]["r"] == 1
+                and llm_ys[idx] not in accurate_res
+            ):
                 success_sum += 1
 
-    return success_time, success_sum/len(data_slm), both_ture/len(data_slm), slm_ture/len(data_slm), llm_ture/len(data_slm), both_false/len(data_slm)
-
+    return (
+        success_time,
+        success_sum / len(data_slm),
+        both_ture / len(data_slm),
+        slm_ture / len(data_slm),
+        llm_ture / len(data_slm),
+        both_false / len(data_slm),
+    )
 
 
 def get_file_path(slm, idx, start_index, end_index):
@@ -85,7 +101,9 @@ def main(idx, start_index, end_index):
         get_file_path_performance(slm, idx, start_index, end_index),
         get_file_path_performance(not slm, idx, start_index, end_index),
     )
-    success_time, success_rate, both_ture, slm_ture, llm_ture, both_false = calculate_success_time(slm_file_path, llm_file_path)
+    success_time, success_rate, both_ture, slm_ture, llm_ture, both_false = (
+        calculate_success_time(slm_file_path, llm_file_path)
+    )
     print(f"Success rate: {success_rate}")
     print(f"Success time: {success_time}")
     print(f"Average accuracy: {success_time / (end_index - start_index)}")

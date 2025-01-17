@@ -1,5 +1,6 @@
 from collections import Counter
 import re
+import math
 
 def check_and_fix_last_line(new_proposal: str, x: str = "") -> (bool, str):
     # Get the last two lines 获取最后的2次操作
@@ -93,6 +94,11 @@ def check_and_fix_last_line(new_proposal: str, x: str = "") -> (bool, str):
 
     # Sort and form the new left numbers
     new_left_num = sorted(pre_left_list, key=int)
+    int_left_num =list(map(int, pre_left_list))
+    product = math.prod(int_left_num)
+    if(product<24):
+        return False, new_proposal
+
     
     # Check if last_left_num matches the expected new_left_num
     if ',' in ' '.join(last_left_num) or new_left_num != last_left_num or false_result:

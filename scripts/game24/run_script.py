@@ -1,6 +1,8 @@
 import subprocess
 
 python_command = ["python", "run_usingLLM.py"]
+python_command_ec = ["python", "run_edge_cloud.py"]
+python_command_fed = ["python", "run_federated.py"]
 
 base_command = [
     "--task", "game24",
@@ -11,24 +13,27 @@ base_command = [
     "--method_select", "greedy",
     "--n_evaluate_sample", "3",
     "--n_select_sample", "5",
-    "--temperature", "0.9"
+    "--temperature", "0.9",
+    "--localbackend", "meta-llama-3.1-8b-instruct@q4_k_m",
 ]
 add_command = [
     "--slm_generate",
     "--check_format",
     "--eval_rule",
     "--slm_eval",
-    "--warm_start"]
+    "--warm_start", 
+    "--remotebackend", "meta-llama-3.1-8b-instruct@q4_k_m",
+    ]
+
 
 command_list = [
-    # python_command + base_command + ["--slm_generate", "--slm_eval"], # pure small model
-    # python_command + base_command, # pure large model
-    # python_command + base_command + ["--slm_generate"], # small-large model collaboration
-    # python_command + base_command + ["--slm_generate", "--check_format"],
-    # python_command + base_command + ["--slm_generate", "--check_format","--eval_rule"],
-    # python_command + base_command + ["--slm_generate", "--check_format","--eval_rule","--warm_start"],
-    # python_command + base_command + ["--slm_generate", "--slm_eval", "--check_format","--eval_rule","--warm_start"]
-    python_command + base_command + ["--check_format","--eval_rule"]
+    #python_command + base_command + ["--slm_generate", "--slm_eval"],
+    #python_command + base_command + ["--slm_generate", "--slm_eval", "--check_format","--eval_rule"],
+    #python_command + base_command + ["--slm_generate", "--slm_eval", "--check_format","--eval_rule","--last_lm"],
+    #python_command_ec + base_command + ["--check_format","--eval_rule","--last_lm"],
+    #python_command + base_command + ["--slm_generate", "--check_format","--eval_rule","--last_lm"],
+    #python_command + base_command + ["--slm_eval", "--check_format","--eval_rule"],
+    python_command + base_command + ["--check_format","--eval_rule"],
 ]
 
 
