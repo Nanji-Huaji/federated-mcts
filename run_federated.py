@@ -50,7 +50,7 @@ def federated_run(args):
     logs, cnt_avg, cnt_any = {}, 0, 0
     lat_all, lat_generate, lat_eval = 0, 0, 0
     federated_client = {"local_client": {"api_base": "http://127.0.0.1:11451/v1", "api_key": "lm-studio", "model": args.localbackend},
-                    "remote_client" : {"api_base": "http://158.132.255.110:1234/v1", "api_key": "lm-studio", "model": args.remotebackend}}
+                    "remote_client" : {"api_base": "http://158.132.255.40:1234/v1", "api_key": "lm-studio", "model": args.remotebackend}}
     if args.naive_run:
         file = f"./logs/federated/{args.task}/{args.localbackend}_{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_federated"
     else:
@@ -120,6 +120,8 @@ def federated_run(args):
     print("log为空") if not logs else print(logs)
     # with open(file + ".json", "w") as f:
     #     json.dump(logs, f, indent=4)
+    import sys
+    print(sys.argv[0])
     with open(file + ".json", "w") as f:
         json.dump(logs, f, indent=4)
 
@@ -144,7 +146,7 @@ def parse_args():
             "Qwen/Qwen2.5-32B-Instruct-GGUF",
             "phi-3.1-mini-128k-instruct",
         ],
-        default="bartowski/Phi-3-medium-128k-instruct-GGUF",
+        default="phi-3.1-mini-128k-instruct",
     )
     args.add_argument(
         "--remotebackend",

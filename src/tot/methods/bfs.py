@@ -11,14 +11,6 @@ LLM_prompt_token = 0
 SLM_completion_token = 0
 SLM_prompt_token = 0
 
-"""
-The part "*_usingLLM" of function name indicates this method using LLM to process tasks.
-This naming method comes from that we use SLM to run tasks.
-The changes are used to let the LLM process **evaluation** part 
-as well as other parts are still handled by SLM.
-
-函数名中的 "*_usingLLM" 表示的是用大模型参与处理任务的方法.
-"""
 
 local_api_key, local_api_base ="lm-studio", "http://127.0.0.1:11451/v1" #"meta-llama-3.1-8b-instruct@q4_k_m" #"http://127.0.0.1:11451/v1","bartowski/Phi-3-medium-128k-instruct-GGUF"
 cloud_api_key, cloud_api_base ="lm-studio", "http://158.132.255.40:1234/v1" #"Qwen/Qwen2.5-32B-Instruct-GGUF" #"bartowski/Phi-3-medium-128k-instruct-GGUF"
@@ -33,7 +25,6 @@ def get_value(args, task, x, y, n_evaluate_sample, cache_value=True, api_key=Non
     if cache_value:
         task.value_cache[value_prompt] = value
     return value
-
 
 def get_values(args, task, x, ys, n_evaluate_sample, cache_value=True, api_key=None, api_base=None, model=None):
     values = []
@@ -52,7 +43,6 @@ def get_values(args, task, x, ys, n_evaluate_sample, cache_value=True, api_key=N
             local_value_cache[y] = value
         values.append(value)
     return values
-
 
 def get_votes(args, task, x, ys, n_evaluate_sample, api_key=None, api_base=None, model=None):
     vote_prompt = task.vote_prompt_wrap(x, ys)
@@ -95,7 +85,6 @@ def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=Non
     if len(new_proposal_list) == 0:
         return [y]
     return new_proposal_list
-
 
 def get_samples(args, task, x, y, n_generate_sample, prompt_sample, stop, api_key=None, api_base=None, model=None):
     if prompt_sample == "standard":
@@ -218,13 +207,12 @@ def naive_solve(args, task, idx, to_print=True):
     ys = get_samples(args, task, x, "", args.n_generate_sample, args.prompt_sample, stop=None)
     return ys, {}
 
-
 def federated_solve(args, task, idx, to_print=True, **kwargs):
     '''
-    **kwargs：传入：
+    **kwargs：input：
     model_1={"api_base": "base_1", "model": "model_1", "api_key"="key_1"},
     model_2={"api_base": "base_2", "model: "model2", "api_key"="key_2"},...
-    例如：
+    e.g. :
     local_model={"api_base": "http://127.0.0.1:11451/v1", "model": "bartowski/Phi-3-medium-128k-instruct-GGUF", "api_key": "lm-studio"},
     remote_model={"api_base": "http://158.132.255.110:1234/v1", "model": "meta-llama-3.1-8b-instruct@q4_k_m", "api_key": "lm-studio"},
     '''
@@ -311,8 +299,85 @@ def federated_solve(args, task, idx, to_print=True, **kwargs):
             print(ys[key])
         lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval} 
     return ys, {"steps": infos}, lat_dict
-                        
+    
+def thread_solve(args, task, idx, to_print=True, **kwargs): 
+    '''
+    kwargs：input：
+    model={"api_base": base, "model": model, "api_key"=key}
+    '''
+    # Initialize model
+    api_base = kwargs["api_base"]
+    model = kwargs["model"]
+    api_key = kwargs["api_key"]
+    global gpt
+    gpt = partial(gpt, model=model, temperature=args.temperature, api_base=api_base)
+    print(gpt)   
+    x = task.get_input(idx)  # input
+    ys = [""]  # current output candidates
+    infos = []
+    lat_all, lat_generate, lat_eval, lat_select = [], [], [], []
+    for step in range(task.steps):
+        step_start_time = time.time()
+        
+        # generation
+        gen_start_time = time.time()
+        if args.method_generate == "sample":
+            new_ys = [get_samples(args, task, x, y, args.n_generate_sample, args.prompt_sample, stop=None, api_base=api_base, api_key=api_key, model=model) for y in ys]
+        elif args.method_generate == "propose":
+            new_ys = [get_proposals(args, step, task, x, y, api_key=api_key, api_base=api_base, model=model) for y in ys]
+        else:
+            raise Exception("Not match!")
+        new_ys = list(itertools.chain(*new_ys))
+        ids = list(range(len(new_ys)))
+        gen_end_time = time.time()
+        lat_generate.append(gen_end_time - gen_start_time)
 
+        # evaluation
+        eval_start_time = time.time()
+        if args.method_evaluate == "vote":
+            values = get_votes(args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model)
+        elif args.method_evaluate == "value":
+            values = get_values(args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model)
+        else:
+            raise Exception("Not match!")
+        eval_end_time = time.time()
+        lat_eval.append(eval_end_time - eval_start_time)
+
+        # selection
+        sel_start_time = time.time()
+        if args.method_select == "sample":
+            ps = np.array(values) / sum(values)
+            select_ids = np.random.choice(ids, size=args.n_select_sample, p=ps).tolist()
+        elif args.method_select == "greedy":
+            select_ids = sorted(ids, key=lambda x: values[x], reverse=True)[: args.n_select_sample]
+        select_new_ys = [new_ys[select_id] for select_id in select_ids]
+        sel_end_time = time.time()
+        lat_select.append(sel_end_time - sel_start_time)
+
+        if to_print:
+            sorted_new_ys, sorted_values = zip(
+                *sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True)
+            )
+            print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
+        infos.append(
+            {   
+                "api_base": api_base,
+                "model": model,
+                "step": step,
+                "x": x,
+                "ys": ys,
+                "new_ys": new_ys,
+                "values": values,
+                "select_new_ys": select_new_ys,
+            }
+        )
+        ys = select_new_ys
+        step_end_time = time.time()
+        lat_all.append(step_end_time - step_start_time)
+    if to_print:
+        print(ys)
+    lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval}
+    return ys, {"steps": infos}, lat_dict
 
 
 # ---------------------------------------------------

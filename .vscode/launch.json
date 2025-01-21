@@ -4,15 +4,32 @@
     // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
-    
-        
         {
             "name": "Python 调试程序: 当前文件",
             "type": "debugpy",
             "request": "launch",
             "program": "${file}",
-            "console": "integratedTerminal",
-            "args": ["--task","game24","--task_start_index","2", "--task_end_index", "3", "--method_generate","propose","--method_evaluate","value", "--method_select", "greedy", "--n_evaluate_sample","3", "--n_select_sample", "5","--temperature","0.9","--slm_generate","--check_format","--eval_rule"]
+            "args": [
+                "--task",
+                "game24",
+                "--task_start_index",
+                "900",
+                "--task_end_index",
+                "901",
+                "--method_generate",
+                "propose",
+                "--method_evaluate",
+                "value",
+                "--method_select",
+                "greedy",
+                "--n_evaluate_sample",
+                "3",
+                "--n_select_sample",
+                "5",
+                "--check_format",
+                "--eval_rule",
+            ],
+            "console": "integratedTerminal"
         }
     ]
 }

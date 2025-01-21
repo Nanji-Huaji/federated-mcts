@@ -39,7 +39,7 @@ def run(args):
         print("ys ", ys)
         infos, output_list = [], []
         for y in ys:
-            r, new_output = task.test_output_modfiy(i, y)
+            r, new_output = task.test_output_modfiy(i, y) # type: ignore
             if(new_output not in output_list):  # Avoid duplication of outputs
                 output_list.append(new_output)
             else:
@@ -52,8 +52,8 @@ def run(args):
                 "ys": ys,
                 "infos": infos,
                 "usage_so_far": token_consumption_edge,
-            }
-        )
+            } # type: ignore
+        ) # type: ignore
         info.update(lat_dict)  # jinyu: update the latency
         lat_all, lat_generate, lat_eval = (
             lat_all + sum(lat_dict["all"]),
