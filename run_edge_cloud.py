@@ -52,7 +52,7 @@ def run(args):
                 "ys": ys,
                 "infos": infos,
                 "usage_so_far": token_consumption_edge,
-            } # type: ignore
+            }
         ) # type: ignore
         info.update(lat_dict)  # jinyu: update the latency
         lat_all, lat_generate, lat_eval = (

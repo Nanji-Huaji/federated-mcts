@@ -12,19 +12,27 @@ SLM_completion_token = 0
 SLM_prompt_token = 0
 
 
-local_api_key, local_api_base ="lm-studio", "http://127.0.0.1:11451/v1" #"meta-llama-3.1-8b-instruct@q4_k_m" #"http://127.0.0.1:11451/v1","bartowski/Phi-3-medium-128k-instruct-GGUF"
-cloud_api_key, cloud_api_base ="lm-studio", "http://158.132.255.40:1234/v1" #"Qwen/Qwen2.5-32B-Instruct-GGUF" #"bartowski/Phi-3-medium-128k-instruct-GGUF"
+local_api_key, local_api_base = (
+    "lm-studio",
+    "http://127.0.0.1:11451/v1",
+)  # "meta-llama-3.1-8b-instruct@q4_k_m" #"http://127.0.0.1:11451/v1","bartowski/Phi-3-medium-128k-instruct-GGUF"
+cloud_api_key, cloud_api_base = (
+    "lm-studio",
+    "http://158.132.255.40:1234/v1",
+)  # "Qwen/Qwen2.5-32B-Instruct-GGUF" #"bartowski/Phi-3-medium-128k-instruct-GGUF"
 openai_api_key, openai_api_base, openai_model = os.environ.get("OPENAI_API_KEY"), "https://try-chatapi.com/v1", "gpt-4o"
+
 
 def get_value(args, task, x, y, n_evaluate_sample, cache_value=True, api_key=None, api_base=None, model=None):
     value_prompt = task.value_prompt_wrap(x, y)
     if cache_value and value_prompt in task.value_cache:
         return task.value_cache[value_prompt]
-    value_outputs = gpt(args, value_prompt, n=n_evaluate_sample, stop=None, api_key=api_key, api_base=api_base, model=model)
+    value_outputs = gpt(args, value_prompt, n=n_evaluate_sample, stop=None, api_key=api_key, api_base=api_base, model=model)  # type: ignore
     value = task.value_outputs_unwrap(x, y, value_outputs)
     if cache_value:
         task.value_cache[value_prompt] = value
     return value
+
 
 def get_values(args, task, x, ys, n_evaluate_sample, cache_value=True, api_key=None, api_base=None, model=None):
     values = []
@@ -34,32 +42,44 @@ def get_values(args, task, x, ys, n_evaluate_sample, cache_value=True, api_key=N
             value = 0
         else:
             # jinyu
-            value, final = task.pre_value_check(y, args.eval_rule) 
-            if value == 0 and final==False:
-                count=0
-                while(value==0 and count<2):
-                    value = get_value(args, task, x, y, n_evaluate_sample, cache_value=cache_value, api_key=api_key, api_base=api_base, model=model)
-                    count+=1
+            value, final = task.pre_value_check(y, args.eval_rule)
+            if value == 0 and final == False:
+                count = 0
+                while value == 0 and count < 2:
+                    value = get_value(
+                        args,
+                        task,
+                        x,
+                        y,
+                        n_evaluate_sample,
+                        cache_value=cache_value,
+                        api_key=api_key,
+                        api_base=api_base,
+                        model=model,
+                    )
+                    count += 1
             local_value_cache[y] = value
         values.append(value)
     return values
 
+
 def get_votes(args, task, x, ys, n_evaluate_sample, api_key=None, api_base=None, model=None):
     vote_prompt = task.vote_prompt_wrap(x, ys)
-    vote_outputs = gpt(args, vote_prompt, n=n_evaluate_sample, stop=None, api_key=api_key, api_base=api_base, model=model)
+    vote_outputs = gpt(args, vote_prompt, n=n_evaluate_sample, stop=None, api_key=api_key, api_base=api_base, model=model)  # type: ignore
     values = task.vote_outputs_unwrap(vote_outputs, len(ys))
     return values
+
 
 def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=None):
     # jinyu:
     need_generate = task.pre_generate_check(y)
-    if need_generate==False:  # no need to generate new proposals
+    if need_generate == False:  # no need to generate new proposals
         return [y]
-    
+
     new_proposal_list, run_times = [], 0
     time_constraint, len_constraint = 3, 4
 
-    while (len(new_proposal_list) < len_constraint and run_times < time_constraint):  # Generate at least 4 proposals
+    while len(new_proposal_list) < len_constraint and run_times < time_constraint:  # Generate at least 4 proposals
 
         propose_prompt = task.propose_prompt_wrap(x, y)
         proposals = gpt(
@@ -70,7 +90,9 @@ def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=Non
             api_key=api_key,
             api_base=api_base,
             model=model,
-        )[0].split("\n")
+        )[
+            0
+        ].split("\n")
 
         # jinyu: check the format
         for pro in proposals:
@@ -86,6 +108,7 @@ def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=Non
         return [y]
     return new_proposal_list
 
+
 def get_samples(args, task, x, y, n_generate_sample, prompt_sample, stop, api_key=None, api_base=None, model=None):
     if prompt_sample == "standard":
         prompt = task.standard_prompt_wrap(x, y)
@@ -93,14 +116,11 @@ def get_samples(args, task, x, y, n_generate_sample, prompt_sample, stop, api_ke
         prompt = task.cot_prompt_wrap(x, y)
     else:
         raise ValueError(f"prompt_sample {prompt_sample} not recognized")
-    samples = gpt(args, prompt, n=n_generate_sample, stop=stop, api_key=api_key, api_base=api_base, model=model)
+    samples = gpt(args, prompt, n=n_generate_sample, stop=stop, api_key=api_key, api_base=api_base, model=model)  # type: ignore
     return [y + _ for _ in samples]
 
+
 def solve_usingLLM_eval(args, task, idx, to_print=True):
-    """
-    This function is used to let LLM process the evaluation part,
-    as well as SLM process other parts.
-    """
     global gpt
     # Output the imformation of models called
     gpt = partial(gpt, model=args.localbackend, temperature=args.temperature)
@@ -128,22 +148,38 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
         # Claim the propose model and value model
         propose_key, propose_base, propose_model = local_api_key, local_api_base, local_model
         # choose a propose model
-        if(args.warm_start == True and step == 0):
+        if args.warm_start == True and step == 0:
             propose_key, propose_base, propose_model = openai_api_key, openai_api_base, openai_model
-        elif(args.slm_generate==False or step+1==task.steps and args.last_lm):
+        elif args.slm_generate == False or step + 1 == task.steps and args.last_lm:
             propose_key, propose_base, propose_model = cloud_api_key, cloud_api_base, cloud_model
         # choose a value model
         value_key, value_base, value_model = local_api_key, local_api_base, local_model
-        if(args.slm_eval==False):
+        if args.slm_eval == False:
             value_key, value_base, value_model = cloud_api_key, cloud_api_base, cloud_model
-        
 
         # generation
         gen_start_time = time.time()
-        if args.method_generate == "sample": # large model for sample
-            new_ys = [get_samples(args, task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step], api_key=propose_key, api_base=propose_base, model=propose_model) for y in ys]
-        elif args.method_generate == "propose": # large model for propose
-            new_ys = [get_proposals(args, step, task, x, y, api_key=propose_key, api_base=propose_base, model=propose_model) for y in ys]
+        if args.method_generate == "sample":  # large model for sample
+            new_ys = [
+                get_samples(
+                    args,
+                    task,
+                    x,
+                    y,
+                    args.n_generate_sample,
+                    prompt_sample=args.prompt_sample,
+                    stop=task.stops[step],
+                    api_key=propose_key,
+                    api_base=propose_base,
+                    model=propose_model,
+                )
+                for y in ys
+            ]
+        elif args.method_generate == "propose":  # large model for propose
+            new_ys = [
+                get_proposals(args, step, task, x, y, api_key=propose_key, api_base=propose_base, model=propose_model)
+                for y in ys
+            ]
         else:
             raise Exception("Not match!")
         new_ys = list(itertools.chain(*new_ys))
@@ -154,9 +190,13 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
         # evaluation
         eval_start_time = time.time()
         if args.method_evaluate == "vote":
-            values = get_votes(args, task, x, new_ys, args.n_evaluate_sample, api_key=value_key, api_base=value_base, model=value_model)
+            values = get_votes(
+                args, task, x, new_ys, args.n_evaluate_sample, api_key=value_key, api_base=value_base, model=value_model
+            )
         elif args.method_evaluate == "value":
-            values = get_values(args, task, x, new_ys, args.n_evaluate_sample, api_key=value_key, api_base=value_base, model=value_model)
+            values = get_values(
+                args, task, x, new_ys, args.n_evaluate_sample, api_key=value_key, api_base=value_base, model=value_model
+            )
         else:
             raise Exception("Not match!")
         eval_end_time = time.time()
@@ -175,9 +215,7 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
 
         # log
         if to_print:
-            sorted_new_ys, sorted_values = zip(
-                *sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True)
-            )
+            sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
             print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
 
         infos.append(
@@ -199,6 +237,7 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
     lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval}
     return ys, {"steps": infos}, lat_dict
 
+
 def naive_solve(args, task, idx, to_print=True):
     global gpt
     gpt = partial(gpt, model=args.localbackend, temperature=args.temperature)
@@ -207,15 +246,16 @@ def naive_solve(args, task, idx, to_print=True):
     ys = get_samples(args, task, x, "", args.n_generate_sample, args.prompt_sample, stop=None)
     return ys, {}
 
+
 def federated_solve(args, task, idx, to_print=True, **kwargs):
-    '''
+    """
     **kwargs：input：
     model_1={"api_base": "base_1", "model": "model_1", "api_key"="key_1"},
     model_2={"api_base": "base_2", "model: "model2", "api_key"="key_2"},...
     e.g. :
     local_model={"api_base": "http://127.0.0.1:11451/v1", "model": "bartowski/Phi-3-medium-128k-instruct-GGUF", "api_key": "lm-studio"},
     remote_model={"api_base": "http://158.132.255.110:1234/v1", "model": "meta-llama-3.1-8b-instruct@q4_k_m", "api_key": "lm-studio"},
-    '''
+    """
     # Initialize federated models
     global gpts
     global models
@@ -223,10 +263,12 @@ def federated_solve(args, task, idx, to_print=True, **kwargs):
     for key, value in kwargs.items():
         gpts.append(partial(gpt, model=value["model"], temperature=args.temperature, api_base=value["api_base"]))
     print(gpts)
-    
+
     x = task.get_input(idx)  # input
     ys = {}  # 输出候选，格式为{model1: [y1, y2, ...], model2: [y1, y2, ...], ...}
-    infos = {} # 信息，格式为{model1: {step: 0, x: x, ys: [], new_ys: [], values: [], select_new_ys: []}, model2: {...}, ...}
+    infos = (
+        {}
+    )  # 信息，格式为{model1: {step: 0, x: x, ys: [], new_ys: [], values: [], select_new_ys: []}, model2: {...}, ...}
     lat_all, lat_generate, lat_eval, lat_select = {}, {}, {}, {}
     for key, value in kwargs.items():
         ys[key] = [""]
@@ -234,15 +276,39 @@ def federated_solve(args, task, idx, to_print=True, **kwargs):
         lat_all[key], lat_generate[key], lat_eval[key], lat_select[key] = [], [], [], []
         for step in range(task.steps):
             step_start_time = time.time()
-            
+
             # generation
             gen_start_time = time.time()
             if args.method_generate == "sample":
-                new_ys = [get_samples(args, task, x, y, args.n_generate_sample, args.prompt_sample, stop=None,
-                api_key=value["api_key"], api_base=value["api_base"], model=value["model"]) for y in ys[key]]
+                new_ys = [
+                    get_samples(
+                        args,
+                        task,
+                        x,
+                        y,
+                        args.n_generate_sample,
+                        args.prompt_sample,
+                        stop=None,
+                        api_key=value["api_key"],
+                        api_base=value["api_base"],
+                        model=value["model"],
+                    )
+                    for y in ys[key]
+                ]
             elif args.method_generate == "propose":
-                new_ys = [get_proposals(args, step, task, x, y, 
-                api_key=value["api_key"], api_base=value["api_base"], model=value["model"]) for y in ys[key]]
+                new_ys = [
+                    get_proposals(
+                        args,
+                        step,
+                        task,
+                        x,
+                        y,
+                        api_key=value["api_key"],
+                        api_base=value["api_base"],
+                        model=value["model"],
+                    )
+                    for y in ys[key]
+                ]
                 # 若不调用大模型，api_key可任填，但必须有
             else:
                 raise Exception("Not match!")
@@ -250,20 +316,36 @@ def federated_solve(args, task, idx, to_print=True, **kwargs):
             ids = list(range(len(new_ys)))
             gen_end_time = time.time()
             lat_generate[key].append(gen_end_time - gen_start_time)
-            
+
             # evaluation
             eval_start_time = time.time()
             if args.method_evaluate == "vote":
-                values = get_votes(args, task, x, new_ys, 
-                args.n_evaluate_sample, api_key=value["api_key"], api_base=value["api_base"], model=value["model"])
+                values = get_votes(
+                    args,
+                    task,
+                    x,
+                    new_ys,
+                    args.n_evaluate_sample,
+                    api_key=value["api_key"],
+                    api_base=value["api_base"],
+                    model=value["model"],
+                )
             elif args.method_evaluate == "value":
-                values = get_values(args, task, x, new_ys, 
-                args.n_evaluate_sample, api_key=value["api_key"], api_base=value["api_base"], model=value["model"])
+                values = get_values(
+                    args,
+                    task,
+                    x,
+                    new_ys,
+                    args.n_evaluate_sample,
+                    api_key=value["api_key"],
+                    api_base=value["api_base"],
+                    model=value["model"],
+                )
             else:
                 raise Exception("Not match!")
             eval_end_time = time.time()
             lat_eval[key].append(eval_end_time - eval_start_time)
-            
+
             # selection
             sel_start_time = time.time()
             if args.method_select == "sample":
@@ -274,13 +356,13 @@ def federated_solve(args, task, idx, to_print=True, **kwargs):
             select_new_ys = [new_ys[select_id] for select_id in select_ids]
             sel_end_time = time.time()
             lat_select[key].append(sel_end_time - sel_start_time)
-            
+
             # log
             if to_print:
-                sorted_new_ys, sorted_values = zip(
-                    *sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True)
+                sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
+                print(
+                    f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n"
                 )
-                print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
             if key not in infos.keys():
                 infos.setdefault(key, {})
             infos[key].append(
@@ -297,34 +379,51 @@ def federated_solve(args, task, idx, to_print=True, **kwargs):
             ys[key] = select_new_ys
         if to_print:
             print(ys[key])
-        lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval} 
+        lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval}
     return ys, {"steps": infos}, lat_dict
-    
-def thread_solve(args, task, idx, to_print=True, **kwargs): 
-    '''
+
+
+def thread_solve(args, task, idx, to_print=True, **kwargs):
+    """
     kwargs：input：
     model={"api_base": base, "model": model, "api_key"=key}
-    '''
+    """
     # Initialize model
     api_base = kwargs["api_base"]
     model = kwargs["model"]
     api_key = kwargs["api_key"]
     global gpt
     gpt = partial(gpt, model=model, temperature=args.temperature, api_base=api_base)
-    print(gpt)   
+    print(gpt)
     x = task.get_input(idx)  # input
     ys = [""]  # current output candidates
     infos = []
     lat_all, lat_generate, lat_eval, lat_select = [], [], [], []
     for step in range(task.steps):
         step_start_time = time.time()
-        
+
         # generation
         gen_start_time = time.time()
         if args.method_generate == "sample":
-            new_ys = [get_samples(args, task, x, y, args.n_generate_sample, args.prompt_sample, stop=None, api_base=api_base, api_key=api_key, model=model) for y in ys]
+            new_ys = [
+                get_samples(
+                    args,
+                    task,
+                    x,
+                    y,
+                    args.n_generate_sample,
+                    args.prompt_sample,
+                    stop=None,
+                    api_base=api_base,
+                    api_key=api_key,
+                    model=model,
+                )
+                for y in ys
+            ]
         elif args.method_generate == "propose":
-            new_ys = [get_proposals(args, step, task, x, y, api_key=api_key, api_base=api_base, model=model) for y in ys]
+            new_ys = [
+                get_proposals(args, step, task, x, y, api_key=api_key, api_base=api_base, model=model) for y in ys
+            ]
         else:
             raise Exception("Not match!")
         new_ys = list(itertools.chain(*new_ys))
@@ -335,9 +434,13 @@ def thread_solve(args, task, idx, to_print=True, **kwargs):
         # evaluation
         eval_start_time = time.time()
         if args.method_evaluate == "vote":
-            values = get_votes(args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model)
+            values = get_votes(
+                args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model
+            )
         elif args.method_evaluate == "value":
-            values = get_values(args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model)
+            values = get_values(
+                args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model
+            )
         else:
             raise Exception("Not match!")
         eval_end_time = time.time()
@@ -355,12 +458,10 @@ def thread_solve(args, task, idx, to_print=True, **kwargs):
         lat_select.append(sel_end_time - sel_start_time)
 
         if to_print:
-            sorted_new_ys, sorted_values = zip(
-                *sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True)
-            )
+            sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
             print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
         infos.append(
-            {   
+            {
                 "api_base": api_base,
                 "model": model,
                 "step": step,
@@ -382,21 +483,21 @@ def thread_solve(args, task, idx, to_print=True, **kwargs):
 
 # ---------------------------------------------------
 # if (
-        #     args.method_generate == "sample"
-        #     and args.slm_generate
-        #     and (step != 0 and args.warm_start == True or args.warm_start == False)
-        # ): # small model for sample
-        #     new_ys = [get_samples(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step], api_key=propose_key, api_base=propose_base, model=propose_model) for y in ys]
-        # elif (
-        #     args.method_generate == "propose"
-        #     and args.slm_generate
-        #     and (step != 0 and args.warm_start == True or args.warm_start == False)
-        # ): # small model for propose
-        #     new_ys = [get_proposals(args, step, task, x, y, api_key=propose_key, api_base=propose_base, model=propose_model) for y in ys]
+#     args.method_generate == "sample"
+#     and args.slm_generate
+#     and (step != 0 and args.warm_start == True or args.warm_start == False)
+# ): # small model for sample
+#     new_ys = [get_samples(task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step], api_key=propose_key, api_base=propose_base, model=propose_model) for y in ys]
+# elif (
+#     args.method_generate == "propose"
+#     and args.slm_generate
+#     and (step != 0 and args.warm_start == True or args.warm_start == False)
+# ): # small model for propose
+#     new_ys = [get_proposals(args, step, task, x, y, api_key=propose_key, api_base=propose_base, model=propose_model) for y in ys]
 # if args.method_evaluate == "vote" and args.slm_eval:
-        #     values = get_votes(task, x, new_ys, args.n_evaluate_sample, api_key=local_api_key, api_base=local_api_base, model=local_model)
-        # elif args.method_evaluate == "value" and args.slm_eval:
-        #     values = get_values(args, task, x, new_ys, args.n_evaluate_sample, api_key=local_api_key, api_base=local_api_base, model=local_model)
+#     values = get_votes(task, x, new_ys, args.n_evaluate_sample, api_key=local_api_key, api_base=local_api_base, model=local_model)
+# elif args.method_evaluate == "value" and args.slm_eval:
+#     values = get_values(args, task, x, new_ys, args.n_evaluate_sample, api_key=local_api_key, api_base=local_api_base, model=local_model)
 # ---------------------------------------------------
 
 # ---------------------------------------------------

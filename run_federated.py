@@ -11,7 +11,7 @@ import openai
 
 
 """
-多Client联合推理方案
+Abandoned
 """
 
 """
@@ -37,20 +37,18 @@ add_command = [
 """
 
 
-"""
-当前为朴素的多端协作推理，类似于Self-Consistency
-federated_run会在多端以相同的方式进行一次推理
-"""
-
-
-
-
 def federated_run(args):
     task = get_task(args.task)
     logs, cnt_avg, cnt_any = {}, 0, 0
     lat_all, lat_generate, lat_eval = 0, 0, 0
-    federated_client = {"local_client": {"api_base": "http://127.0.0.1:11451/v1", "api_key": "lm-studio", "model": args.localbackend},
-                    "remote_client" : {"api_base": "http://158.132.255.40:1234/v1", "api_key": "lm-studio", "model": args.remotebackend}}
+    federated_client = {
+        "local_client": {"api_base": "http://127.0.0.1:11451/v1", "api_key": "lm-studio", "model": args.localbackend},
+        "remote_client": {
+            "api_base": "http://158.132.255.40:1234/v1",
+            "api_key": "lm-studio",
+            "model": args.remotebackend,
+        },
+    }
     if args.naive_run:
         file = f"./logs/federated/{args.task}/{args.localbackend}_{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_federated"
     else:
@@ -59,7 +57,7 @@ def federated_run(args):
     if not os.path.exists(file):
         os.makedirs(file)
     for i in range(args.task_start_index, args.task_end_index + 1):
-        print('Solve task ', i)
+        print("Solve task ", i)
         # solve
         if args.naive_run:
             ys, info = naive_solve(args, task, i)
@@ -69,10 +67,10 @@ def federated_run(args):
         print("ys ", ys)
         # 收到ys, info, lat_dict
         # 此时ys和info的意义如下：
-        '''
+        """
         ys = {}  # 输出候选，格式为{model1: [y1, y2, ...], model2: [y1, y2, ...], ...}
         infos = {} # 信息，格式为{model1: {step: 0, x: x, ys: [], new_ys: [], values: [], select_new_ys: []}, model2: {...}, ...}
-        '''
+        """
         # log
         new_output = {}
         infos, output_list = {}, {}
@@ -83,21 +81,21 @@ def federated_run(args):
             if model not in infos.keys():
                 infos.setdefault(model, [])
             if model not in output_list.keys():
-                output_list.setdefault(model, []) 
+                output_list.setdefault(model, [])
             if model not in new_output.keys():
                 new_output.setdefault(model, [])
             for y in ys[model]:
-                r, new_output[model] = task.test_output_modfiy(i, y)
+                r, new_output[model] = task.test_output_modfiy(i, y)  # type: ignore
                 if model not in new_output.keys():
                     new_output.setdefault(model, [])
                 if model not in output_list.keys():
                     output_list.setdefault(model, [])
-                if(new_output[model] not in output_list[model]):  # Avoid duplication of outputs
+                if new_output[model] not in output_list[model]:  # Avoid duplication of outputs
                     output_list[model].append(new_output)
                 else:
                     r = {"r": 0}  # Do not count twice
                 infos[model].append(r)
-            token_consumption = 0 # 暂时未完成
+            token_consumption = 0  # 暂时未完成
             if model not in info.keys():
                 info.setdefault(model, {})
             info[model].update(
@@ -121,13 +119,10 @@ def federated_run(args):
     # with open(file + ".json", "w") as f:
     #     json.dump(logs, f, indent=4)
     import sys
+
     print(sys.argv[0])
     with open(file + ".json", "w") as f:
         json.dump(logs, f, indent=4)
-
-
-
-
 
 
 def parse_args():
@@ -160,15 +155,13 @@ def parse_args():
             "bartowski/Phi-3-medium-128k-instruct-GGUF",
             "meta-llama-3.1-8b-instruct@q4_k_m",
             "Qwen/Qwen2.5-32B-Instruct-GGUF",
-            "qwen2.5-32b-instruct"
+            "qwen2.5-32b-instruct",
         ],
         default="qwen2.5-32b-instruct",
     )
     args.add_argument("--temperature", type=float, default=0.9)
 
-    args.add_argument(
-        "--task", type=str, required=True, choices=["game24", "text", "crosswords"]
-    )
+    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords"])
     args.add_argument("--task_start_index", type=int, default=900)
     args.add_argument("--task_end_index", type=int, default=1000)
 
@@ -179,12 +172,8 @@ def parse_args():
 
     args.add_argument("--method_generate", type=str, choices=["sample", "propose"])
     args.add_argument("--method_evaluate", type=str, choices=["value", "vote"])
-    args.add_argument(
-        "--method_select", type=str, choices=["sample", "greedy"], default="greedy"
-    )
-    args.add_argument(
-        "--n_generate_sample", type=int, default=1
-    )  # only thing needed if naive_run
+    args.add_argument("--method_select", type=str, choices=["sample", "greedy"], default="greedy")
+    args.add_argument("--n_generate_sample", type=int, default=1)  # only thing needed if naive_run
     args.add_argument("--n_evaluate_sample", type=int, default=1)
     args.add_argument("--n_select_sample", type=int, default=1)
 
@@ -200,24 +189,18 @@ def parse_args():
         action="store_true",
         help="check the format and correctness of the generated contents",
     )
-    args.add_argument(
-        "--eval_rule", action="store_true", help="use rules for evaluation"
-    )
+    args.add_argument("--eval_rule", action="store_true", help="use rules for evaluation")
     # args.add_argument(
     #     "--warm_start",
     #     action="store_true",
     #     help="step 0 uses large model for generation",
     # )
-    args.add_argument(
-        "--inference_idx", type=int, default=0, help="Do multiple experiments"
-    )
+    args.add_argument("--inference_idx", type=int, default=0, help="Do multiple experiments")
     # args.add_argument(
     #     "--last_lm", action="store_true", help="Use the large model for the last step"
     # )
 
     # args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
-
-
 
     args = args.parse_args()
     return args

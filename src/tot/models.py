@@ -92,17 +92,6 @@ def chatgpt(
     return outputs
 
 
-# def gpt_usage(backend="gpt-4"):
-#     global completion_tokens, prompt_tokens, slm_completion_tokens, slm_prompt_tokens, llm_completion_tokens, llm_prompt_tokens
-#     if backend == "gpt-4":
-#         cost = completion_tokens / 1000 * 0.06 + prompt_tokens / 1000 * 0.03
-#     elif backend == "gpt-3.5-turbo":
-#         cost = completion_tokens / 1000 * 0.002 + prompt_tokens / 1000 * 0.0015
-#     else:
-#         cost = completion_tokens + prompt_tokens
-#     return {"completion_tokens": completion_tokens, "prompt_tokens": prompt_tokens, "cost": cost}
-
-
 def gpt_usage(backend="gpt-4o"):
     global completion_tokens, prompt_tokens, slm_completion_tokens, slm_prompt_tokens, llm_completion_tokens, llm_prompt_tokens
     cost = (
