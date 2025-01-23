@@ -1,3 +1,8 @@
+# Tianyi
+# Some unused prompts are deleted.
+# Find them on GitHub or in Git records if needed.
+
+
 # 5-shot
 standard_prompt = """Use numbers and basic arithmetic operations (+ - * /) to obtain 24.
 Input: 4 4 6 8
@@ -71,53 +76,6 @@ Input: {input}
 Possible next steps:
 """
 
-propose_prompt_backup_s0 = """Now we are going to use the input to play game of 24. Please imitate the example below and write out the Possible next steps based on the numbers in the Input. 
-Please note: each number can only be used once, and try to avoid generating completely identical operations.
-Please strictly adhere to the following output format and do not output any text other than these formats.
-Please express only the latest steps when stating possible next steps, without repeating the steps that have already been expressed before.
-Please do not forget that after two numbers are operated on, what remains is and only is the result of their operation.
-Please note that each possible next step is independent of one another.
-If the given input has already reached 24, please do not perform any operations and directly output the original input.
-Input: 2 8 8 14
-Possible next steps:
-2 + 8 = 10 (left: 8 10 14)
-8 / 2 = 4 (left: 4 8 14)
-14 + 2 = 16 (left: 8 8 16)
-2 * 8 = 16 (left: 8 14 16)
-8 - 2 = 6 (left: 6 8 14)
-14 - 8 = 6 (left: 2 6 8)
-14 /  2 = 7 (left: 7 8 8)
-14 - 2 = 12 (left: 8 8 12)
-Input: {input}
-Possible next steps:
-"""
-
-
-value_prompt_backup1 = """Evaluate if given numbers can reach 24 with an output of (left: 24) (sure/likely/impossible).
-Follow these guidelines:
-Please do not restate the question.
-Do not derive in any way other than the following example.
-Examples:
-1 + 1 = 2 (left: 1 2 8)\n1 + 2 = 3 (left: 3 8)\n 3 * 8 = 24 (left: 24)\n
-sure
-6 + 6 = 12 (left: 6 6 12)\n
-likely
-5 * 6 = 30 (left: 4, 10, 30)\n30 - 10 = 20 (left: 20, 4)\n20 + 4 = 24 (left: 24)\n
-sure
-6 * 6 = 36 (left: 6 6 36)\n6 + 6 = 12 (left: 12, 36)\n36 - 12 = 24 (left: 24)\n
-sure
-1 * 1 = 1 (left: 1, 2, 12)\n2 * 12 = 24 (left: 1 24)\n24 / 1 = 24 (left: 24)\n
-sure
-2 + 3 = 5 (left: 1 4 5)\n1 + 5 = 6 (left: 4 6)\n
-likely
-8 / 1 = 8 (left: 1 2 8)\n8 / 1 = 8 (left: 2 8)\n8 - 2 = 6 (left: 6)\n
-impossible
-8 - 1 = 7 (left: 1 2 7)\n7 - 1 = 6 (left: 2 6)\n
-impossible
-5 + 6 = 11 (left: 4 10 11)\n11 - 4 = 7 (left: 6 7 10)\n7 / 6 = 1.1667 (rounded to four decimal places, left: 10 1.1667)\n
-impossible
-{input}
-"""
 
 value_prompt = """Evaluate if given numbers can reach 24 (sure/likely/impossible). Please do not restate the question, do not derive in any way other than the following example.
 10 14
