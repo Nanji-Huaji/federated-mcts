@@ -20,7 +20,7 @@ def run(args):
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
 
     for i in range(args.task_start_index, args.task_end_index):
-        print('Solve task ', i)
+        print("Solve task ", i)
         # solve
         if args.naive_run:
             ys, info = naive_solve(args, task, i)
@@ -33,8 +33,8 @@ def run(args):
         print("ys ", ys)
         infos, output_list = [], []
         for y in ys:
-            r, new_output = task.test_output_modfiy(i, y)
-            if(new_output not in output_list):  # Avoid duplication of outputs
+            r, new_output = task.test_output_modfiy(i, y)  # type: ignore
+            if new_output not in output_list:  # Avoid duplication of outputs
                 output_list.append(new_output)
             else:
                 r = {"r": 0}  # Do not count twice
@@ -46,8 +46,8 @@ def run(args):
                 "ys": ys,
                 "infos": infos,
                 "usage_so_far": token_consumption,
-            }
-        )
+            }  # type: ignore
+        )  # type: ignore
         info.update(lat_dict)  # jinyu: update the latency
         lat_all, lat_generate, lat_eval = (
             lat_all + sum(lat_dict["all"]),
@@ -75,7 +75,7 @@ def run(args):
         "lat_generate": lat_generate,
         "lat_eval": lat_eval,
         "sm": args.localbackend,
-        "llm": args.remotebackend
+        "llm": args.remotebackend,
     }
     res_json.update(token_consumption)
 
@@ -113,60 +113,41 @@ def parse_args():
             "bartowski/Phi-3-medium-128k-instruct-GGUF",
             "meta-llama-3.1-8b-instruct@q4_k_m",
             "Qwen/Qwen2.5-32B-Instruct-GGUF",
-            "qwen2.5-32b-instruct"
+            "qwen2.5-32b-instruct",
         ],
         default="qwen2.5-32b-instruct",
     )
     args.add_argument("--temperature", type=float, default=0.9)
-
-    args.add_argument(
-        "--task", type=str, required=True, choices=["game24", "text", "crosswords"]
-    )
+    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords"])
     args.add_argument("--task_start_index", type=int, default=900)
     args.add_argument("--task_end_index", type=int, default=1000)
-
     args.add_argument("--naive_run", action="store_true")
     args.add_argument(
         "--prompt_sample", type=str, choices=["standard", "cot"]
     )  # only used when method_generate = sample, or naive_run
-
     args.add_argument("--method_generate", type=str, choices=["sample", "propose"])
     args.add_argument("--method_evaluate", type=str, choices=["value", "vote"])
-    args.add_argument(
-        "--method_select", type=str, choices=["sample", "greedy"], default="greedy"
-    )
-    args.add_argument(
-        "--n_generate_sample", type=int, default=1
-    )  # only thing needed if naive_run
+    args.add_argument("--method_select", type=str, choices=["sample", "greedy"], default="greedy")
+    args.add_argument("--n_generate_sample", type=int, default=1)  # only thing needed if naive_run
     args.add_argument("--n_evaluate_sample", type=int, default=1)
     args.add_argument("--n_select_sample", type=int, default=1)
 
     # jinyu
-    args.add_argument(
-        "--slm_generate", action="store_true", help="use small lm for generation"
-    )
-    args.add_argument(
-        "--slm_eval", action="store_true", help="use small lm for evaluation"
-    )
+    args.add_argument("--slm_generate", action="store_true", help="use small lm for generation")
+    args.add_argument("--slm_eval", action="store_true", help="use small lm for evaluation")
     args.add_argument(
         "--check_format",
         action="store_true",
         help="check the format and correctness of the generated contents",
     )
-    args.add_argument(
-        "--eval_rule", action="store_true", help="use rules for evaluation"
-    )
+    args.add_argument("--eval_rule", action="store_true", help="use rules for evaluation")
     args.add_argument(
         "--warm_start",
         action="store_true",
         help="step 0 uses large model for generation",
     )
-    args.add_argument(
-        "--inference_idx", type=int, default=0, help="Do multiple experiments"
-    )
-    args.add_argument(
-        "--last_lm", action="store_true", help="Use the large model for the last step"
-    )
+    args.add_argument("--inference_idx", type=int, default=0, help="Do multiple experiments")
+    args.add_argument("--last_lm", action="store_true", help="Use the large model for the last step")
 
     args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
 
@@ -177,5 +158,5 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     print(args)
-    print(f"api_key为{openai.api_key}, api_base为{openai.api_base}.")
+    print(f"api_key is set to {openai.api_key}, api_base is set to{openai.api_base}.")
     run(args)
