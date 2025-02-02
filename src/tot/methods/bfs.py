@@ -10,6 +10,7 @@ LLM_completion_token = 0
 LLM_prompt_token = 0
 SLM_completion_token = 0
 SLM_prompt_token = 0
+token_usage = {}  # TODO: add token usage tracking
 
 
 local_api_key, local_api_base = (
@@ -398,7 +399,7 @@ def client_solve(
     return ys, {"steps": infos}, lat_dict
 
 
-def assign_task(model_list, ys, **kwargs):
+def assign_task(model_list, ys):
     """
     input: ys: list of str which are the selected output candidates
     **kwargs: a dict of the dicts of api_base, model, api_key, client_name

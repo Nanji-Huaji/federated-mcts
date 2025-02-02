@@ -27,8 +27,6 @@ def run(args):
         else:
             ys, info, lat_dict = solve_usingLLM_eval(args, task, i)
 
-        print(f"task.step为{task.steps}.")
-
         # log
         print("ys ", ys)
         infos, output_list = [], []
