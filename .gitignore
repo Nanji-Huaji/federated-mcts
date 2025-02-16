@@ -8,3 +8,4 @@ src/tree_of_thoughts_llm.egg-info/
 /logs
 .vscode/launch.json
 .gitignore
+test.ipynb

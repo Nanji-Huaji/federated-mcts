@@ -52,29 +52,43 @@ def client_solve_wrapper(args, task, current_task, ys, model_dict: dict, step: i
     )
 
 
+def list_merge(ys):
+    """
+    Merge a list of lists into one list
+    """
+    return [item for sublist in ys for item in sublist]
+
+
 def run(args):
     global file
     task = get_task(args.task)
     logs, cnt_avg, cnt_any = [], 0, 0
     lat_all, lat_generate, lat_eval = 0, 0, 0
     simple_task, hard_task = [], []
-    ys = []  # all the ys from all the models, this is used for communication between models
     # Define the log file path
     model_name = [model["model"] for model in model_list]
     model_name_str = "_".join(model_name)
     time_str = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime(time.time()))
-    file = f"./logs/federated/thread/{args.task}/{model_name_str}/{args.temperature}_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}"
+    if args.naive_run:
+        file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}"
+    else:
+        file = f"./logs/federated/{args.task}/{model_name_str}/{args.temperature}_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}"
     file += "_" + time_str
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
 
+    print(f"The models is defined as {model_list}")
+    info = {}  # info is a dictionary that stores the information of the task
+    if args.naive_run:
+        raise NotImplementedError("Naive run is not implemented yet")
+
     for i in range(args.task_start_index, args.task_end_index):
+        ys = [""]  # ys is a list of outputs from each model
+        print(f"Task {i}")
         task = get_task(args.task)
         current_task = task.get_input(i)
-        info = []
         for step in range(task.steps):
+            print(f"Step {step} of {task.steps} in Task {i}")
             # TODO
-            # 0. initialize ys if it is empty(ok)
-            # 1. assign task to client(ok)
             # 2. solve task on each client(ok?)
             # 3. aggregate results
             step_ys = []
@@ -92,16 +106,17 @@ def run(args):
                     new_ys, new_info, lat_dict = client_solve_wrapper(
                         args, task, current_task, ys, model_list[i], step, to_print=True
                     )
-                    step_ys.append(new_ys)
-                    info.append(new_info)
-                    lat_all += lat_dict["all"]
-                    lat_generate += lat_dict["generate"]
-                    lat_eval += lat_dict["eval"]
+                    step_ys += new_ys
+                    info.update(new_info)
+                    # TODO: Update the latency
+                    # lat_all += lat_dict["all"]
+                    # lat_generate += lat_dict["generate"]
+                    # lat_eval += lat_dict["eval"]
             # Aggregate results
-            ys = step_ys if step_ys else ys
+            ys += step_ys
+            ys = list_merge(ys)  # Convert the data structure from list of list to list
         # log
         infos, output_list = [], []
-        print("ys ", ys)
         for y in ys:
             r, new_output = task.test_output_modfiy(i, y)  # type: ignore
             if new_output not in output_list:  # Avoid duplication of outputs
@@ -110,6 +125,7 @@ def run(args):
                 r = {"r": 0}  # Do not count twice
             infos.append(r)
         # token_consumption = gpt_usage(args.localbackend)
+        token_consumption = 0
         # TODO: Add token consumption to the log
         info.update(  # type: ignore
             {
@@ -121,11 +137,16 @@ def run(args):
         )
         # TODO: Save logs
         info.update(lat_dict)  # type: ignore # jinyu: update the latency
-        lat_all, lat_generate, lat_eval = (
-            lat_all + sum(lat_dict["all"]),
-            lat_generate + sum(lat_dict["generate"]),
-            lat_eval + sum(lat_dict["eval"]),
-        )
+        # lat_all, lat_generate, lat_eval = (
+        #     lat_all + sum(lat_dict["all"]),
+        #     lat_generate + sum(lat_dict["generate"]),
+        #     lat_eval + sum(lat_dict["eval"]),
+        # )
         logs.append(info)
         with open(file + ".json", "w") as f:
             json.dump(logs, f, indent=4)
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    run(args)

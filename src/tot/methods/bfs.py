@@ -316,6 +316,8 @@ def client_solve(
     current_task: str, the input of the current (original) task
     step: int, the current step of the task
     """
+    if ys == []:
+        ys = [""]  # empty list cause bugs
     global gpt
     gpt = partial(gpt, model=model, temperature=args.temperature, api_base=api_base)
     print(gpt)
@@ -349,6 +351,7 @@ def client_solve(
     ids = list(range(len(new_ys)))
     gen_end_time = time.time()
     lat_generate.append(gen_end_time - gen_start_time)
+
     # evaluation
     eval_start_time = time.time()
     if args.method_evaluate == "vote":
@@ -375,7 +378,7 @@ def client_solve(
     sel_end_time = time.time()
     lat_select.append(sel_end_time - sel_start_time)
 
-    if to_print:
+    if to_print and new_ys and values:
         sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
         print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
     infos.append(
