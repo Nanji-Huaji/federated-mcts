@@ -29,7 +29,7 @@ model_list = [
         "client_name": "remote_client",
         "api_base": "http://158.132.255.40:1234/v1",
         "api_key": "lm-studio",
-        "model": "qwen2.5-32b-instruct",
+        "model": "phi-3-medium-4k-instruct",
     },
 ]
 
@@ -75,11 +75,10 @@ def run(args):
         file = f"./logs/federated/{args.task}/{model_name_str}/{args.temperature}_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}"
     file += "_" + time_str
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
-
-    print(f"The models is defined as {model_list}")
-    info = {}  # info is a dictionary that stores the information of the task
     if args.naive_run:
         raise NotImplementedError("Naive run is not implemented yet")
+    print(f"The models is defined as {model_list}")
+    info = []  # info is a dictionary that stores the information of the task
 
     for i in range(args.task_start_index, args.task_end_index):
         ys = [""]  # ys is a list of outputs from each model
@@ -87,34 +86,45 @@ def run(args):
         task = get_task(args.task)
         current_task = task.get_input(i)
         for step in range(task.steps):
-            print(f"Step {step} of {task.steps} in Task {i}")
+            print(f"Step {step} of {task.steps} in Task {i}")  # 在第1个task中的第2个step卡住了，一直输出runtime  3
             # TODO
-            # 2. solve task on each client(ok?)
             # 3. aggregate results
             step_ys = []
             if (not ys) or (not ys[0]):
                 # Do the first inference using the 0th model if ys is empty
                 new_ys, new_info, lat_dict = client_solve_wrapper(
-                    args, task, current_task, [], model_list[0], step, to_print=True
+                    args, task, current_task, [""], model_list[0], step, to_print=True
                 )
-                ys.append(new_ys)
+                step_ys.extend(new_ys)
+                info.append(new_info)
+                print(f"初始化完成！new_ys为{new_ys}")
             else:  # if ys is not empty
+                print("ys非空，开始分配任务")
+                print(f"ys为{ys}，ys的长度为{len(ys)}")
                 # Assign task to client
                 task_list = assign_task(model_list, ys)
+                # Remove the " " in the task_list
+                task_list = [task for task in task_list if task != " "]
+                print(f"分配任务完成，task_list为{task_list}")
                 # Solve task on each client
                 for i in range(min(len(model_list), len(task_list))):
+                    print(f"在{model_list[i]}上推理{task_list[i]}")
                     new_ys, new_info, lat_dict = client_solve_wrapper(
-                        args, task, current_task, ys, model_list[i], step, to_print=True
+                        args, task, current_task, task_list[i], model_list[i], step, to_print=True
                     )
                     step_ys += new_ys
-                    info.update(new_info)
+                    print(f"推理完成，step_ys为{step_ys}")
+                    print(f"new_ys: {new_ys}，new_info: {new_info}")
+                    info.append(new_info)
+                    print(f"new_info: {new_info}")
                     # TODO: Update the latency
                     # lat_all += lat_dict["all"]
                     # lat_generate += lat_dict["generate"]
                     # lat_eval += lat_dict["eval"]
             # Aggregate results
-            ys += step_ys
             ys = list_merge(ys)  # Convert the data structure from list of list to list
+            ys = step_ys.copy()
+
         # log
         infos, output_list = [], []
         for y in ys:
@@ -127,22 +137,16 @@ def run(args):
         # token_consumption = gpt_usage(args.localbackend)
         token_consumption = 0
         # TODO: Add token consumption to the log
-        info.update(  # type: ignore
-            {
-                "idx": i,
-                "ys": ys,
-                "infos": infos,
-                "usage_so_far": token_consumption,  # type: ignore
-            }
-        )
+
         # TODO: Save logs
-        info.update(lat_dict)  # type: ignore # jinyu: update the latency
+        info.append(lat_dict)  # type: ignore
         # lat_all, lat_generate, lat_eval = (
         #     lat_all + sum(lat_dict["all"]),
         #     lat_generate + sum(lat_dict["generate"]),
         #     lat_eval + sum(lat_dict["eval"]),
         # )
         logs.append(info)
+        logs.append(infos)
         with open(file + ".json", "w") as f:
             json.dump(logs, f, indent=4)
 
@@ -150,3 +154,4 @@ def run(args):
 if __name__ == "__main__":
     args = parse_args()
     run(args)
+    print("Done")

@@ -402,7 +402,11 @@ def client_solve(
     return ys, {"steps": infos}, lat_dict
 
 
-def assign_task(model_list, ys):
+def federated_solve(args, task, idx: int, models: dict, assign_func, to_print=True):
+    pass
+
+
+def assign_task(model_list, ys) -> list:
     """
     input: ys: list of str which are the selected output candidates
     **kwargs: a dict of the dicts of api_base, model, api_key, client_name
