@@ -7,6 +7,8 @@ from tot.tasks import get_task
 from tot.methods.bfs import naive_solve, client_solve, assign_task
 from tot.models import gpt_usage
 import time
+from tot.methods.bfs import client_solve_wrapper
+from tot.methods.bfs import list_merge
 
 import openai
 
@@ -32,31 +34,6 @@ model_list = [
         "model": "phi-3-medium-4k-instruct",
     },
 ]
-
-
-def client_solve_wrapper(args, task, current_task, ys, model_dict: dict, step: int, to_print=True):
-    """
-    model_info: dict, "client_name": {"model": model_name, "api_base": api_base, "api_key": api_key}
-    """
-    return client_solve(
-        args,
-        task,
-        current_task,
-        ys,
-        step,
-        model_dict["api_base"],
-        model_dict["api_key"],
-        model_dict["model"],
-        model_dict["client_name"],
-        to_print,
-    )
-
-
-def list_merge(ys):
-    """
-    Merge a list of lists into one list
-    """
-    return [item for sublist in ys for item in sublist]
 
 
 def run(args):
@@ -86,13 +63,11 @@ def run(args):
         task = get_task(args.task)
         current_task = task.get_input(i)
         for step in range(task.steps):
-            print(f"Step {step} of {task.steps} in Task {i}")  # 在第1个task中的第2个step卡住了，一直输出runtime  3
-            # TODO
-            # 3. aggregate results
+            print(f"Step {step} of {task.steps} in Task {i}")
             step_ys = []
             if (not ys) or (not ys[0]):
                 # Do the first inference using the 0th model if ys is empty
-                new_ys, new_info, lat_dict = client_solve_wrapper(
+                new_ys, new_info, lat_dict, values, new_selected_ys = client_solve_wrapper(
                     args, task, current_task, [""], model_list[0], step, to_print=True
                 )
                 step_ys.extend(new_ys)
@@ -109,7 +84,7 @@ def run(args):
                 # Solve task on each client
                 for i in range(min(len(model_list), len(task_list))):
                     print(f"在{model_list[i]}上推理{task_list[i]}")
-                    new_ys, new_info, lat_dict = client_solve_wrapper(
+                    new_ys, new_info, lat_dict, values, new_selected_ys = client_solve_wrapper(
                         args, task, current_task, task_list[i], model_list[i], step, to_print=True
                     )
                     step_ys += new_ys

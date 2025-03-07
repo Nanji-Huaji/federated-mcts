@@ -5,6 +5,7 @@ from tot.models import gpt
 import os, re
 from tot.pattern_match import check_and_fix_last_line
 import time
+from tot.tasks import get_task
 
 LLM_completion_token = 0
 LLM_prompt_token = 0
@@ -309,7 +310,8 @@ def client_solve(
     model: str,
     client_name: str,
     to_print=True,
-) -> tuple:
+    eval_model=None,
+):
     """
     This function generates the solve for only 1 step based on the middle steps given by ys and the current task.
     ys: list of str which are the selected output candidates, this list is selected by the assign_task function
@@ -336,7 +338,7 @@ def client_solve(
                 y,
                 args.n_generate_sample,
                 prompt_sample=args.prompt_sample,
-                stop=None,
+                stop=task.stops[step],
                 api_base=api_base,
                 api_key=api_key,
                 model=model,
@@ -344,7 +346,7 @@ def client_solve(
             for y in ys
         ]
     elif args.method_generate == "propose":
-        new_ys = [get_proposals(args, 0, task, x, y, api_key=api_key, api_base=api_base, model=model) for y in ys]
+        new_ys = [get_proposals(args, step, task, x, y, api_key=api_key, api_base=api_base, model=model) for y in ys]
     else:
         raise Exception("Not match!")
     new_ys = list(itertools.chain(*new_ys))
@@ -353,14 +355,18 @@ def client_solve(
     lat_generate.append(gen_end_time - gen_start_time)
 
     # evaluation
+    if eval_model is not None:
+        pass
+    else:
+        eval_model = model
     eval_start_time = time.time()
     if args.method_evaluate == "vote":
         values = get_votes(
-            args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model
+            args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=eval_model
         )
     elif args.method_evaluate == "value":
         values = get_values(
-            args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model
+            args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=eval_model
         )
     else:
         raise Exception("Not match!")
@@ -394,16 +400,37 @@ def client_solve(
             "select_new_ys": select_new_ys,
         }
     )
-    ys = select_new_ys
+    # ys = select_new_ys
 
     all_end_time = time.time()
     lat_all.append(all_end_time - gen_start_time)
     lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval}
-    return ys, {"steps": infos}, lat_dict
+    return ys, {"steps": infos}, lat_dict, values, select_new_ys
 
 
-def federated_solve(args, task, idx: int, models: dict, assign_func, to_print=True):
-    pass
+def client_solve_wrapper(args, task, current_task, ys, model_dict: dict, step: int, to_print=True):
+    """
+    model_info: dict, "client_name": {"model": model_name, "api_base": api_base, "api_key": api_key}
+    """
+    return client_solve(
+        args,
+        task,
+        current_task,
+        ys,
+        step,
+        model_dict["api_base"],
+        model_dict["api_key"],
+        model_dict["model"],
+        model_dict["client_name"],
+        to_print,
+    )
+
+
+def list_merge(ys):
+    """
+    Merge a list of lists into one list
+    """
+    return [item for sublist in ys for item in sublist]
 
 
 def assign_task(model_list, ys) -> list:
@@ -421,6 +448,74 @@ def assign_task(model_list, ys) -> list:
     for i in range(len(ys)):
         task_list[i % len(model_list)].append(ys[i])
     return task_list
+
+
+# TODO: Complete the federated_solve function
+# Currently, the function is not complete and may not work
+def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_task, to_print=True):
+    current_task = task.get_input(idx)  # input
+    ys = [""]  # current output candidates
+    infos = []
+    info = []
+    values = []
+    select_new_ys = []
+    for step in range(task.steps):
+        print(f"Step {step} of {task.steps} in Task {i}")  # type: ignore
+        step_ys = []
+        if (not ys) or (not ys[0]):
+            # Do the first inference using the 0th model if ys is empty
+            new_ys, new_info, lat_dict, new_value, new_ys_selected = client_solve_wrapper(
+                args, task, current_task, [""], model_list[0], step, to_print=True
+            )
+            step_ys.extend(new_ys)
+            info.append(new_info)
+            values.extend(new_value)
+            select_new_ys.extend(new_ys_selected)
+
+        else:  # if ys is not empty
+
+            # Assign task to client
+            task_list = assign_func(model_list, ys)
+            # Remove the " " in the task_list
+            task_list = [task for task in task_list if task != " "]
+            print(f"分配任务完成，task_list为{task_list}")
+            # Solve task on each client
+            for i in range(min(len(model_list), len(task_list))):
+                print(f"在{model_list[i]}上推理{task_list[i]}")
+                new_ys, new_info, lat_dict, new_value, new_ys_selected = client_solve_wrapper(
+                    args, task, current_task, task_list[i], model_list[i], step, to_print=True
+                )
+                step_ys.extend(new_ys)
+                values.extend(new_value)
+                select_new_ys.extend(new_ys_selected)
+                print(f"推理完成，step_ys为{step_ys}")
+                print(f"new_ys: {new_ys}，new_info: {new_info}")
+                info.append(new_info)
+                print(f"new_info: {new_info}")
+                # TODO: Update the latency
+                # lat_all += lat_dict["all"]
+                # lat_generate += lat_dict["generate"]
+                # lat_eval += lat_dict["eval"]
+        # Aggregate results
+        ys = list_merge(ys)  # Convert the data structure from list of list to list
+        ys = step_ys.copy()
+
+        if to_print:
+            sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
+            print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
+
+        infos.append(
+            {
+                "step": step,
+                "x": current_task,
+                "ys": ys,
+                "step_ys": step_ys,
+                "values": values,
+                "select_new_ys": select_new_ys,
+            }
+        )
+
+    return ys, {"steps": infos}, lat_dict
 
 
 def thread_solve(args, task, idx, to_print=True, **kwargs):
