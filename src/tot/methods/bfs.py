@@ -460,7 +460,7 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
     values = []
     select_new_ys = []
     for step in range(task.steps):
-        print(f"Step {step} of {task.steps} in Task {i}")  # type: ignore
+        print(f"Step {step} of {task.steps} in Task {idx}")  # type: ignore
         step_ys = []
         if (not ys) or (not ys[0]):
             # Do the first inference using the 0th model if ys is empty
