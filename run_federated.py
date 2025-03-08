@@ -13,11 +13,11 @@ from tot.methods.bfs import list_merge
 import openai
 
 # model_weight is used to judge the inference capability of each model
-model_weight = {
-    "meta-llama-3.1-8b-instruct@q4_k_m": 1,
-    "qwen2.5-32b-instruct": 1,
-    "gpt-4o": 5,
-}
+# model_weight = {
+#     "meta-llama-3.1-8b-instruct@q4_k_m": 1,
+#     "qwen2.5-32b-instruct": 1,
+#     "gpt-4o": 5,
+# }
 
 # model_list is a list of models that we want to use in the federated learning
 model_list = [

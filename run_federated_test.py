@@ -48,6 +48,8 @@ def run(args):
         raise NotImplementedError("Naive run is not implemented yet")
     print(f"The models is defined as {model_list}")
 
+    token_consump = {model: 0 for model in map(lambda m: m["model"], model_list)}
+
     for i in range(args.task_start_index, args.task_end_index):
         print(f"Solving task {i}")
         # solve
@@ -72,6 +74,7 @@ def run(args):
                 output_list.append(new_output)
             else:
                 r = {"r": 0}
+            infos.append(r)
         token_consumption = "Not implemented"
         info.update(
             {
@@ -87,11 +90,13 @@ def run(args):
 
         # log main metric
         accs = [info["r"] for info in infos]
-        cnt_avg += sum(accs)  # / len(accs) #jinyu: counting the sum
+        cnt_avg += sum(accs)
         cnt_any += any(accs)
         print(i, "sum(accs)", sum(accs), "cnt_avg", cnt_avg, "cnt_any", cnt_any, "\n")
 
 
 if __name__ == "__main__":
     args = parse_args()
+    print("Begin running federated test")
     run(args)
+    print("End running federated test")

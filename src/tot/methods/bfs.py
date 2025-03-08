@@ -319,7 +319,7 @@ def client_solve(
     step: int, the current step of the task
     """
     if ys == []:
-        ys = [""]  # empty list cause bugs
+        ys = [""]  # empty list causes bugs
     global gpt
     gpt = partial(gpt, model=model, temperature=args.temperature, api_base=api_base)
     print(gpt)
@@ -355,9 +355,7 @@ def client_solve(
     lat_generate.append(gen_end_time - gen_start_time)
 
     # evaluation
-    if eval_model is not None:
-        pass
-    else:
+    if eval_model is None:
         eval_model = model
     eval_start_time = time.time()
     if args.method_evaluate == "vote":
@@ -405,7 +403,7 @@ def client_solve(
     all_end_time = time.time()
     lat_all.append(all_end_time - gen_start_time)
     lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval}
-    return ys, {"steps": infos}, lat_dict, values, select_new_ys
+    return new_ys, {"steps": infos}, lat_dict, values, select_new_ys
 
 
 def client_solve_wrapper(args, task, current_task, ys, model_dict: dict, step: int, to_print=True):
@@ -458,7 +456,7 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
     infos = []
     info = []
     values = []
-    select_new_ys = []
+    select_new_ys = [""]
     for step in range(task.steps):
         print(f"Step {step} of {task.steps} in Task {idx}")  # type: ignore
         step_ys = []
@@ -471,13 +469,23 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
             info.append(new_info)
             values.extend(new_value)
             select_new_ys.extend(new_ys_selected)
+            ys = select_new_ys
+            print(
+                f"""
+                    第一次推理完成，
+                    ys为{ys}
+                    step_ys为{step_ys}
+                    new_ys: {new_ys}
+                    new_info: {new_info}
+                    new_value: {new_value}
+                    new_ys_selected: {new_ys_selected}
+"""
+            )
 
         else:  # if ys is not empty
 
             # Assign task to client
             task_list = assign_func(model_list, ys)
-            # Remove the " " in the task_list
-            task_list = [task for task in task_list if task != " "]
             print(f"分配任务完成，task_list为{task_list}")
             # Solve task on each client
             for i in range(min(len(model_list), len(task_list))):
@@ -497,8 +505,8 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
                 # lat_generate += lat_dict["generate"]
                 # lat_eval += lat_dict["eval"]
         # Aggregate results
-        ys = list_merge(ys)  # Convert the data structure from list of list to list
         ys = step_ys.copy()
+        print(f"ys: {ys}")
 
         if to_print:
             sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
@@ -514,6 +522,7 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
                 "select_new_ys": select_new_ys,
             }
         )
+        print(f"client_solve end, infos: {infos}")
 
     return ys, {"steps": infos}, lat_dict
 
