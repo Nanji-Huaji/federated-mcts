@@ -2,6 +2,8 @@ import os
 import openai
 import backoff
 
+# from run_federated_test import federated_token_usage
+
 completion_tokens = prompt_tokens = 0
 slm_completion_tokens = slm_prompt_tokens = 0
 llm_completion_tokens = llm_prompt_tokens = 0
@@ -64,6 +66,8 @@ def chatgpt(
     api_key=openai.api_key,
 ) -> list:
     global completion_tokens, prompt_tokens, slm_completion_tokens, slm_prompt_tokens, llm_completion_tokens, llm_prompt_tokens
+    from run_federated_test import federated_token_usage
+
     outputs = []
     while n > 0:
         cnt = min(n, 20)
@@ -85,9 +89,12 @@ def chatgpt(
         if model == args.remotebackend:
             llm_completion_tokens += res["usage"]["completion_tokens"]
             llm_prompt_tokens += res["usage"]["prompt_tokens"]
-        else:
+        elif model == args.localbackend:
             slm_completion_tokens += res["usage"]["completion_tokens"]
             slm_prompt_tokens += res["usage"]["prompt_tokens"]
+        elif model in federated_token_usage.keys():
+            federated_token_usage[model]["completion_tokens"] += res["usage"]["completion_tokens"]
+            federated_token_usage[model]["prompt_tokens"] += res["usage"]["prompt_tokens"]
 
     return outputs
 

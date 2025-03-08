@@ -11,7 +11,8 @@ LLM_completion_token = 0
 LLM_prompt_token = 0
 SLM_completion_token = 0
 SLM_prompt_token = 0
-token_usage = {}  # TODO: add token usage tracking
+
+# TODO: add token usage tracking with dict formatted as {client_name: {token_name: token_usage}}
 
 
 local_api_key, local_api_base = (
@@ -456,10 +457,15 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
     infos = []
     info = []
     values = []
+
+    lat_all, lat_generate, lat_eval, lat_select = [], [], [], []
+
     select_new_ys = [""]
     for step in range(task.steps):
+        step_start_time = time.time()
         print(f"Step {step} of {task.steps} in Task {idx}")  # type: ignore
         step_ys = []
+        gen_start_time = time.time()
         if (not ys) or (not ys[0]):
             # Do the first inference using the 0th model if ys is empty
             new_ys, new_info, lat_dict, new_value, new_ys_selected = client_solve_wrapper(
@@ -472,9 +478,9 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
             ys = select_new_ys
             print(
                 f"""
-                    第一次推理完成，
-                    ys为{ys}
-                    step_ys为{step_ys}
+                    Finished the first inference using the 0th model
+                    ys: {ys}
+                    step_ys: {step_ys}
                     new_ys: {new_ys}
                     new_info: {new_info}
                     new_value: {new_value}
@@ -501,9 +507,9 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
                 info.append(new_info)
                 print(f"new_info: {new_info}")
                 # TODO: Update the latency
-                # lat_all += lat_dict["all"]
-                # lat_generate += lat_dict["generate"]
-                # lat_eval += lat_dict["eval"]
+                lat_all += lat_dict["all"]
+                lat_generate += lat_dict["generate"]
+                lat_eval += lat_dict["eval"]
         # Aggregate results
         ys = step_ys.copy()
         print(f"ys: {ys}")

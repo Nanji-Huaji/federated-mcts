@@ -1,16 +1,14 @@
 import os
 import json
-import argparse
-from run_usingLLM import parse_args
-
 from tot.tasks import get_task
-from tot.methods.bfs import naive_solve, client_solve, assign_task
-from tot.models import gpt_usage
+from tot.methods.bfs import assign_task
 import time
-from tot.methods.bfs import client_solve_wrapper
-from tot.methods.bfs import list_merge
-
 from tot.methods.bfs import federated_solve
+from run_usingLLM import parse_args
+from functools import partial
+
+
+federated_token_usage = {}
 
 model_list = [
     {
@@ -29,11 +27,11 @@ model_list = [
 
 
 def run(args):
-    global file
+    global file, federated_token_usage
+    federated_token_usage = {model: 0 for model in map(lambda m: m["model"], model_list)}
     task = get_task(args.task)
     logs, cnt_avg, cnt_any = [], 0, 0
     lat_all, lat_generate, lat_eval = 0, 0, 0
-    simple_task, hard_task = [], []
     # Define the log file path
     model_name = [model["model"] for model in model_list]
     model_name_str = "_".join(model_name)
@@ -48,8 +46,8 @@ def run(args):
         raise NotImplementedError("Naive run is not implemented yet")
     print(f"The models is defined as {model_list}")
 
-    token_consump = {model: 0 for model in map(lambda m: m["model"], model_list)}
-
+    # generation
+    gen_start = time.time()
     for i in range(args.task_start_index, args.task_end_index):
         print(f"Solving task {i}")
         # solve
@@ -75,13 +73,12 @@ def run(args):
             else:
                 r = {"r": 0}
             infos.append(r)
-        token_consumption = "Not implemented"
         info.update(
             {
                 "idx": i,
                 "ys": ys,
                 "infos": infos,
-                "usage_so_far": token_consumption,
+                "usage_so_far": federated_token_usage,
             }  # type: ignore
         )  # type: ignore
         logs.append(info)
@@ -93,10 +90,23 @@ def run(args):
         cnt_avg += sum(accs)
         cnt_any += any(accs)
         print(i, "sum(accs)", sum(accs), "cnt_avg", cnt_avg, "cnt_any", cnt_any, "\n")
+        n = args.task_end_index - args.task_start_index
+    print("The average sum is ", cnt_avg / n, ". The accuracy is: ", cnt_any / n)
+    print("Latency: ", lat_all, ", ", lat_generate, ", ", lat_eval)
+    res_json = {
+        "avg_sum": cnt_avg / n,
+        "acc": cnt_any / n,
+        "lat": lat_all,
+        "lat_generate": lat_generate,
+        "lat_eval": lat_eval,
+        "sm": args.localbackend,
+        "llm": args.remotebackend,
+    }
+    with open(file + "_performance.json", "w") as f:
+        json.dump(res_json, f, indent=4)
 
 
 if __name__ == "__main__":
+
     args = parse_args()
-    print("Begin running federated test")
     run(args)
-    print("End running federated test")

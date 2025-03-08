@@ -55,10 +55,10 @@ def run(args):
     if args.naive_run:
         raise NotImplementedError("Naive run is not implemented yet")
     print(f"The models is defined as {model_list}")
-    info = []  # info is a dictionary that stores the information of the task
+    info = []
 
     for i in range(args.task_start_index, args.task_end_index):
-        ys = [""]  # ys is a list of outputs from each model
+        ys = [""]
         print(f"Task {i}")
         task = get_task(args.task)
         current_task = task.get_input(i)
@@ -72,23 +72,19 @@ def run(args):
                 )
                 step_ys.extend(new_ys)
                 info.append(new_info)
-                print(f"初始化完成！new_ys为{new_ys}")
+                print(f"Initialization completed! new_ys is {new_ys}")
             else:  # if ys is not empty
-                print("ys非空，开始分配任务")
-                print(f"ys为{ys}，ys的长度为{len(ys)}")
                 # Assign task to client
                 task_list = assign_task(model_list, ys)
                 # Remove the " " in the task_list
                 task_list = [task for task in task_list if task != " "]
-                print(f"分配任务完成，task_list为{task_list}")
                 # Solve task on each client
                 for i in range(min(len(model_list), len(task_list))):
-                    print(f"在{model_list[i]}上推理{task_list[i]}")
+                    print(f"On {model_list[i]} inference {task_list[i]}")
                     new_ys, new_info, lat_dict, values, new_selected_ys = client_solve_wrapper(
                         args, task, current_task, task_list[i], model_list[i], step, to_print=True
                     )
                     step_ys += new_ys
-                    print(f"推理完成，step_ys为{step_ys}")
                     print(f"new_ys: {new_ys}，new_info: {new_info}")
                     info.append(new_info)
                     print(f"new_info: {new_info}")
