@@ -311,7 +311,7 @@ def client_solve(
     model: str,
     client_name: str,
     to_print=True,
-    eval_model=None,
+    local_eval=True,
 ):
     """
     This function generates the solve for only 1 step based on the middle steps given by ys and the current task.
@@ -356,32 +356,36 @@ def client_solve(
     lat_generate.append(gen_end_time - gen_start_time)
 
     # evaluation
-    if eval_model is None:
-        eval_model = model
-    eval_start_time = time.time()
-    if args.method_evaluate == "vote":
-        values = get_votes(
-            args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=eval_model
-        )
-    elif args.method_evaluate == "value":
-        values = get_values(
-            args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=eval_model
-        )
-    else:
-        raise Exception("Not match!")
-    eval_end_time = time.time()
-    lat_eval.append(eval_end_time - eval_start_time)
+    if local_eval:
+        eval_start_time = time.time()
+        if args.method_evaluate == "vote":
+            values = get_votes(
+                args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model
+            )
+        elif args.method_evaluate == "value":
+            values = get_values(
+                args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model
+            )
+        else:
+            raise Exception("Not match!")
+        eval_end_time = time.time()
+        lat_eval.append(eval_end_time - eval_start_time)
 
-    # selection
-    sel_start_time = time.time()
-    if args.method_select == "sample":
-        ps = np.array(values) / sum(values)
-        select_ids = np.random.choice(ids, size=args.n_select_sample, p=ps).tolist()
-    elif args.method_select == "greedy":
-        select_ids = sorted(ids, key=lambda x: values[x], reverse=True)[: args.n_select_sample]
-    select_new_ys = [new_ys[select_id] for select_id in select_ids]
-    sel_end_time = time.time()
-    lat_select.append(sel_end_time - sel_start_time)
+        # selection
+        sel_start_time = time.time()
+        if args.method_select == "sample":
+            ps = np.array(values) / sum(values)
+            select_ids = np.random.choice(ids, size=args.n_select_sample, p=ps).tolist()
+        elif args.method_select == "greedy":
+            select_ids = sorted(ids, key=lambda x: values[x], reverse=True)[: args.n_select_sample]
+        select_new_ys = [new_ys[select_id] for select_id in select_ids]
+        sel_end_time = time.time()
+        lat_select.append(sel_end_time - sel_start_time)
+    else:
+        values = [0] * len(new_ys)
+        select_new_ys = new_ys
+        lat_eval.append(0)
+        lat_select.append(0)
 
     if to_print and new_ys and values:
         sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
@@ -407,7 +411,7 @@ def client_solve(
     return new_ys, {"steps": infos}, lat_dict, values, select_new_ys
 
 
-def client_solve_wrapper(args, task, current_task, ys, model_dict: dict, step: int, to_print=True):
+def client_solve_wrapper(args, task, current_task, ys, model_dict: dict, step: int, to_print=True, local_eval=True):
     """
     model_info: dict, "client_name": {"model": model_name, "api_base": api_base, "api_key": api_key}
     """
@@ -422,6 +426,7 @@ def client_solve_wrapper(args, task, current_task, ys, model_dict: dict, step: i
         model_dict["model"],
         model_dict["client_name"],
         to_print,
+        local_eval,
     )
 
 
@@ -435,7 +440,6 @@ def list_merge(ys):
 def assign_task(model_list, ys) -> list:
     """
     input: ys: list of str which are the selected output candidates
-    **kwargs: a dict of the dicts of api_base, model, api_key, client_name
     output: a list, like that
     [[task1, task2, task3], [task4, task5, task6], [task7, task8, task9]]
     tasks are assigned to different clients with the same index in the model_list
@@ -451,7 +455,16 @@ def assign_task(model_list, ys) -> list:
 
 # TODO: Complete the federated_solve function
 # Currently, the function is not complete and may not work
-def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_task, to_print=True):
+def federated_solve(
+    args,
+    task,
+    idx: int,
+    model_list: dict,
+    assign_func=assign_task,
+    to_print=True,
+    local_eval=True,
+    **kwargs,
+):
     current_task = task.get_input(idx)  # input
     ys = [""]  # current output candidates
     infos = []
@@ -480,7 +493,6 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
                 f"""
                     Finished the first inference using the 0th model
                     ys: {ys}
-                    step_ys: {step_ys}
                     new_ys: {new_ys}
                     new_info: {new_info}
                     new_value: {new_value}
@@ -489,7 +501,6 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
             )
 
         else:  # if ys is not empty
-
             # Assign task to client
             task_list = assign_func(model_list, ys)
             print(f"分配任务完成，task_list为{task_list}")
@@ -497,21 +508,60 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
             for i in range(min(len(model_list), len(task_list))):
                 print(f"在{model_list[i]}上推理{task_list[i]}")
                 new_ys, new_info, lat_dict, new_value, new_ys_selected = client_solve_wrapper(
-                    args, task, current_task, task_list[i], model_list[i], step, to_print=True
+                    args, task, current_task, task_list[i], model_list[i], step, to_print, local_eval
                 )
-                step_ys.extend(new_ys)
+                if local_eval:
+                    step_ys.extend(new_ys)
+                    values.extend(new_value)
+                    select_new_ys.extend(new_ys_selected)
+                    print(f"Finished, step_ys is {step_ys}")
+                    print(f"new_ys: {new_ys}，new_info: {new_info}")
+                    info.append(new_info)
+                    print(f"new_info: {new_info}")
+                    # TODO: Update the latency
+                    lat_all += lat_dict["all"]
+                    lat_generate += lat_dict["generate"]
+                    lat_eval += lat_dict["eval"]
+            if not local_eval:
+                # evaluation
+                ys = new_ys.copy()
                 values.extend(new_value)
-                select_new_ys.extend(new_ys_selected)
-                print(f"推理完成，step_ys为{step_ys}")
-                print(f"new_ys: {new_ys}，new_info: {new_info}")
-                info.append(new_info)
-                print(f"new_info: {new_info}")
-                # TODO: Update the latency
-                lat_all += lat_dict["all"]
-                lat_generate += lat_dict["generate"]
-                lat_eval += lat_dict["eval"]
+                if args.method_evaluate == "vote":
+                    values = get_votes(
+                        args,
+                        task,
+                        current_task,
+                        new_ys,
+                        args.n_evaluate_sample,
+                        api_key=kwargs.get("eval_api_key"),
+                        api_base=kwargs.get("eval_api_base"),
+                        model=kwargs.get("eval_model"),
+                    )
+                elif args.method_evaluate == "value":
+                    values = get_values(
+                        args,
+                        task,
+                        current_task,
+                        new_ys,
+                        args.n_evaluate_sample,
+                        api_key=kwargs.get("eval_api_key"),
+                        api_base=kwargs.get("eval_api_base"),
+                        model=kwargs.get("eval_model"),
+                    )
+                else:
+                    raise Exception("Not match!")
+
+                # selection
+                print(f"values: {values}")
+                ids = list(range(len(new_ys)))
+                if args.method_select == "sample":
+                    ps = np.array(values) / sum(values)
+                    select_ids = np.random.choice(ids, size=args.n_select_sample, p=ps).tolist()
+                elif args.method_select == "greedy":
+                    select_ids = sorted(ids, key=lambda x: values[x], reverse=True)[: args.n_select_sample]
+                select_new_ys = [step_ys[select_id] for select_id in select_ids]
         # Aggregate results
-        ys = step_ys.copy()
+
         print(f"ys: {ys}")
 
         if to_print:
@@ -523,7 +573,6 @@ def federated_solve(args, task, idx: int, model_list: dict, assign_func=assign_t
                 "step": step,
                 "x": current_task,
                 "ys": ys,
-                "step_ys": step_ys,
                 "values": values,
                 "select_new_ys": select_new_ys,
             }

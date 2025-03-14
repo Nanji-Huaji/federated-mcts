@@ -6,7 +6,16 @@ import time
 from tot.methods.bfs import federated_solve
 from run_usingLLM import parse_args
 from functools import partial
+from src.tot.models import gpt
 
+
+openai_api_key, openai_api_base, openai_model = os.environ.get("OPENAI_API_KEY"), "https://try-chatapi.com/v1", "gpt-4o"
+
+gpt_4o_model = {
+    "eval_api_key": openai_api_key,
+    "eval_api_base": openai_api_base,
+    "eval_model": openai_model,
+}
 
 federated_token_usage = {}
 
@@ -17,12 +26,12 @@ model_list = [
         "api_key": "lm-studio",
         "model": "meta-llama-3.1-8b-instruct@q4_k_m",
     },
-    {
-        "client_name": "remote_client",
-        "api_base": "http://158.132.255.40:1234/v1",
-        "api_key": "lm-studio",
-        "model": "phi-3-medium-4k-instruct",
-    },
+    # {
+    #     "client_name": "remote_client",
+    #     "api_base": "http://158.132.255.40:1234/v1",
+    #     "api_key": "lm-studio",
+    #     "model": "phi-3-medium-4k-instruct",
+    # },
 ]
 
 
@@ -61,6 +70,8 @@ def run(args):
                 model_list,
                 assign_task,
                 to_print=True,
+                local_eval=False,
+                **gpt_4o_model,
             )
 
         # log
@@ -107,6 +118,16 @@ def run(args):
 
 
 if __name__ == "__main__":
-
     args = parse_args()
+    models = [
+        partial(
+            gpt,
+            model=model["model"],
+            temperature=args.temperature,
+            api_base=model["api_base"],
+        )
+        for model in model_list
+    ]
+    for model in models:
+        print(model)
     run(args)
