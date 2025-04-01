@@ -77,9 +77,10 @@ $$
 T_i' = \{z_j \in T_i | \rm{Format\_Check}(z_j)=True\}
 $$
 
-Where $\rm{Format\_Check}$$(z_j)=$ True if $z_j$​ matches the pattern "number operator number = result (left: remaining numbers)" otherwise​ False.
+Where Format_Check($z_j$)=True if $z_j$​ matches the pattern "number operator number = result (left: remaining numbers)" otherwise​ False.
 
 (3) Thought Aggregation: Due to the thoughts $T_i$ is generated on different models, it is necessary to aggregate all the result, i.e.
+
 $$
 T= \cap_{i} T_i
 $$
