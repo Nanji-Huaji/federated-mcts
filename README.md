@@ -85,6 +85,8 @@ $$
 T= \cap_{i} T_i
 $$
 
+(4) What Happens if Federated Inference is Used? 
+
 ### 3. Evaluation
 
 (1) Strategies of Evaluation:
