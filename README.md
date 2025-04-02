@@ -47,14 +47,30 @@ To address these issues, we propose the Federated MCTS method, a plug-and-play r
 The steps of our method is the same as the original Tree-of-Thought framework, which are **decomposition, generation, evaluation, and selection**. For the 24-point task, we use breadth-first search while searching in the Monte Carlo tree. Like the original work, our work consists of a tree, whose node is a state $s=[t_i, z_1, ..., z_{n-1}]$ representing a partial solution with the input and the sequence of thoughts so far.
 
 ### 1. Decomposition: 
-For each 24-point task $t_i$, each decomposition $z_j$ of $t_i$ is a line of equalance like:
+For each 24-point task $t_i$, each decomposition $z_j$ of $t_i$ is a line matching the pattern "number operator number = result (left: remaining numbers)" like
 ```plaintext
 8 - 1 = 7 (left: 1 1 7)
 ```
 
 ### 2. Generation: 
+
+(1) Task Assignment: For state $s$ and model list $[m_1, ..., m_m]$, task assignment decomposes $s$ into a list of $s_1, ..., s_m$, and assign $s_l$ to model $m_l$.
+
+$$
+s_1, ..., s_m = \rm{TaskAssign}(s, m)
+$$
    
-(1) Thought Generation: For each state $s$, generation strategy $p_e$, candidates number $k$ and generation model $m$, thought generator $G(s, p_e, k, m)$ generates $k$ candidates using the language model $m$. For the generation strategies, there are two strategies: sample and propose. 
+Where function $\rm{TaskAssign(·)}$ decomposes $s=[t_i, z_1, ..., z_{n-1}]$ to $s_r=[t_i, z_s, ..., z_t]$, where $t - s + 1 = \lfloor \frac{n-1}{m} \rfloor$.
+
+Specially, if $s=[t_i]$, i.e. there is no "thought" generated yet, initial generation will be used on the first model $m_1$, which is
+
+$$
+z_1, ..., z_k = G(s, p_{\theta}^{\rm{propose}}, k, m_1)
+$$
+
+Where thought generator $G(·)$ is introduced in the following paragraph.
+
+(2) Thought Generation: For each state $s$, generation strategy $p_e$, candidates number $k$ and generation model $m$, thought generator $G(s, p_e, k, m)$ generates $k$ candidates using the language model $m$. For the generation strategies, there are two strategies: sample and propose. 
 
     (a) Sample: 
     (b) Propose: 
@@ -71,21 +87,20 @@ $$
 T_i = G(s, p_{\theta}^{\rm{propose}}, k, m_i)
 $$
 
-(2) Format Verification: For each $z_j$, check whether it has the same format like the example hereinbefore.
+(3) Format Verification: For each $z_j$, check whether it has the same format like the example hereinbefore.
 
 $$
-T_i' = \{z_j \in T_i | \rm{Format\_Check}(z_j)=True\}
+T_i' = \{ z_j \in T_i | \rm{FormatCheck}(z_j)=True \}
 $$
 
-Where Format_Check($z_j$)=True if $z_j$​ matches the pattern "number operator number = result (left: remaining numbers)" otherwise​ False.
+Where FormatCheck($z_j$)=True if $z_j$​ matches the pattern "number operator number = result (left: remaining numbers)" otherwise​ False.
 
-(3) Thought Aggregation: Due to the thoughts $T_i$ is generated on different models, it is necessary to aggregate all the result, i.e.
+(4) Thought Aggregation: Due to the thoughts $T_i$ is generated on different models, it is necessary to aggregate all the result, i.e.
 
 $$
 T= \cap_{i} T_i
 $$
 
-(4) What Happens if Federated Inference is Used? 
 
 ### 3. Evaluation
 
@@ -94,9 +109,11 @@ $$
     (a) Vote: 
     (b) Value: 
 
-(2) Assigning Score to Each thought $z_j$:
+(2) Evaluation Task Assignment: Given the state $s$, model list $m_1, m_q$ (Where $q$ can be different to $m$ hereinafter). 
 
-(3) Rule-Enhanced Evaluation:
+(3) Assigning Score to each $z_j$
+
+(4) Rule-Enhanced Evaluation:
 ## Expriments
 
 ## Results
