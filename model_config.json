@@ -1,0 +1,14 @@
+[
+    {
+        "client_name": "local_client",
+        "api_base": "http://127.0.0.1:11451/v1",
+        "api_key": "lm-studio",
+        "model": "meta-llama-3.1-8b-instruct@q4_k_m"
+    },
+    {
+        "client_name": "remote_client",
+        "api_base": "http://158.132.255.40:1234/v1",
+        "api_key": "lm-studio",
+        "model": "phi-3-medium-4k-instruct"
+    }
+]
