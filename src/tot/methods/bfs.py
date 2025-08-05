@@ -12,6 +12,8 @@ LLM_prompt_token = 0
 SLM_completion_token = 0
 SLM_prompt_token = 0
 
+from typing import Tuple, List, Dict
+
 # TODO: add token usage tracking with dict formatted as {client_name: {token_name: token_usage}}
 
 
@@ -291,9 +293,10 @@ def solve_usingLLM_eval(args, task, idx, to_print=True):
     return ys, {"steps": infos}, lat_dict
 
 
-def naive_solve(args, task, idx, to_print=True):
-    global gpt
-    gpt = partial(gpt, model=args.localbackend, temperature=args.temperature)
+def naive_solve(args, task, idx, to_print=True, model=None):
+    if model is None:
+        global gpt
+        gpt = partial(gpt, model=args.localbackend, temperature=args.temperature)
     print(gpt)
     x = task.get_input(idx)  # input
     ys = get_samples(args, task, x, "", args.n_generate_sample, args.prompt_sample, stop=None)
@@ -582,101 +585,27 @@ def federated_solve(
     return ys, {"steps": infos}, lat_dict
 
 
-def thread_solve(args, task, idx, to_print=True, **kwargs):
+def naive_solve_wrapper(args, task, idx, to_print=True, **kwargs) -> Tuple[List[str], Dict[str, List[Dict]]]:
     """
-    kwargs：input：
-    "api_base" = base, "model" = model, "api_key" = key, "client_name" = client_name
+    A wrapper for the naive_solve function.
     """
-    # Initialize model
-    api_base = kwargs["api_base"]
-    model = kwargs["model"]
-    api_key = kwargs["api_key"]
-    client_name = kwargs["client_name"]
-    global gpt
-    gpt = partial(gpt, model=model, temperature=args.temperature, api_base=api_base)
-    print(gpt)
-    x = task.get_input(idx)  # input
-    ys = [""]  # current output candidates
-    infos = []
-    lat_all, lat_generate, lat_eval, lat_select = [], [], [], []
-    for step in range(task.steps):
-        step_start_time = time.time()
+    return naive_solve(args, task, idx, to_print=to_print)
 
-        # generation
-        gen_start_time = time.time()
-        if args.method_generate == "sample":
-            new_ys = [
-                get_samples(
-                    args,
-                    task,
-                    x,
-                    y,
-                    args.n_generate_sample,
-                    args.prompt_sample,
-                    stop=None,
-                    api_base=api_base,
-                    api_key=api_key,
-                    model=model,
-                )
-                for y in ys
-            ]
-        elif args.method_generate == "propose":
-            new_ys = [
-                get_proposals(args, step, task, x, y, api_key=api_key, api_base=api_base, model=model) for y in ys
-            ]
-        else:
-            raise Exception("Not match!")
-        new_ys = list(itertools.chain(*new_ys))
-        ids = list(range(len(new_ys)))
-        gen_end_time = time.time()
-        lat_generate.append(gen_end_time - gen_start_time)
 
-        # evaluation
-        eval_start_time = time.time()
-        if args.method_evaluate == "vote":
-            values = get_votes(
-                args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model
-            )
-        elif args.method_evaluate == "value":
-            values = get_values(
-                args, task, x, new_ys, args.n_evaluate_sample, api_key=api_key, api_base=api_base, model=model
-            )
-        else:
-            raise Exception("Not match!")
-        eval_end_time = time.time()
-        lat_eval.append(eval_end_time - eval_start_time)
+def solve_wrapper(args, task, idx, to_print=True, **kwargs) -> Tuple[List[str], Dict[str, List[Dict]]]:
+    """
+    A wrapper for the solve function.
+    """
+    return solve(args, task, idx, to_print=to_print)
 
-        # selection
-        sel_start_time = time.time()
-        if args.method_select == "sample":
-            ps = np.array(values) / sum(values)
-            select_ids = np.random.choice(ids, size=args.n_select_sample, p=ps).tolist()
-        elif args.method_select == "greedy":
-            select_ids = sorted(ids, key=lambda x: values[x], reverse=True)[: args.n_select_sample]
-        select_new_ys = [new_ys[select_id] for select_id in select_ids]
-        sel_end_time = time.time()
-        lat_select.append(sel_end_time - sel_start_time)
 
-        if to_print:
-            sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
-            print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
-        infos.append(
-            {
-                "client_name": client_name,
-                "api_base": api_base,
-                "model": model,
-                "step": step,
-                "x": x,
-                "ys": ys,
-                "new_ys": new_ys,
-                "values": values,
-                "select_new_ys": select_new_ys,
-            }
-        )
-        ys = select_new_ys
-        step_end_time = time.time()
-        lat_all.append(step_end_time - step_start_time)
-    if to_print:
-        print(ys)
-    lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval}
-    return ys, {"steps": infos}, lat_dict
+def solve_usingLLM_eval_wrapper(args, task, idx, to_print=True, **kwargs) -> Tuple[List[str], Dict[str, List[Dict]]]:
+    """
+    A wrapper for the solve_usingLLM_eval function.
+    """
+    ys, info, _ = solve_usingLLM_eval(args, task, idx, to_print=to_print)
+    return ys, info
+
+
+def federated_solve_wrapper(args, task, idx, to_print=True, **kwargs) -> Tuple[List[str], Dict[str, List[Dict]]]:
+    raise NotImplementedError("federated_solve_wrapper is not implemented yet. Please implement it in your codebase.")
