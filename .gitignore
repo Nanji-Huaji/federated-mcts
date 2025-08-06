@@ -10,3 +10,5 @@ src/tree_of_thoughts_llm.egg-info/
 .gitignore
 test.ipynb
 test.ipynb
+
+.venv/*

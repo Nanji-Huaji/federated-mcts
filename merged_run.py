@@ -13,6 +13,8 @@ from tot.methods.bfs import list_merge
 import openai
 
 
+from tot.methods.bfs import ToTMethods
+
 def file_name_generater(args):
     if args.naive_run:
         file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
@@ -20,6 +22,8 @@ def file_name_generater(args):
         file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
     return file
+
+
 
 
 def run(args, solve_function):
@@ -143,6 +147,7 @@ def parse_args():
         action="store_true",
         help="step 0 uses large model for generation",
     )
+    args.add_argument("--model_config", type=str, default="model_config.json", help="Path to the model configuration file")
     args.add_argument("--inference_idx", type=int, default=0, help="Do multiple experiments")
     args.add_argument("--last_lm", action="store_true", help="Use the large model for the last step")
 
