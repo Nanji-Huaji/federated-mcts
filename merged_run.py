@@ -1,33 +1,45 @@
 import os
 import json
 import argparse
-from run_usingLLM import parse_args
 
-from tot.tasks import get_task
-from tot.methods.bfs import naive_solve, client_solve, assign_task
-from tot.models import get_model_usage_summary
-import time
-from tot.methods.bfs import client_solve_wrapper
-from tot.methods.bfs import list_merge
+from src.tot.tasks import get_task
+from src.tot.methods.bfs import naive_solve, client_solve
+from src.tot.models import get_model_usage_summary
 
 import openai
 
 
-from tot.methods.bfs import ToTMethods
+from src.tot.methods.bfs import ToTMethods
+
+import sys
+import os
+
+# 添加 src 目录到 Python 路径
+src_path = os.path.join(os.path.dirname(__file__), "src")
+sys.path.insert(0, src_path)
+
 
 def file_name_generater(args):
     if args.naive_run:
         file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
     else:
-        file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
+        file = f"./logs/{args.task}/{args.solve_method}/{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
+    print(f"File name: {file}.json")
     return file
-
-
 
 
 def run(args, solve_function):
     file_name = file_name_generater(args)
+
+    totmethod = ToTMethods(args)
+    function_map = {
+        "naive": totmethod.naive_solve,
+        "tot": totmethod.solve,
+        "speculative_solve": totmethod.speculative_solve,
+        "federated_solve": totmethod.federated_solve,
+    }
+    solve_function = function_map[solve_function]
 
     logs, cnt_avg, cnt_any = [], 0, 0
 
@@ -36,7 +48,7 @@ def run(args, solve_function):
         print(f"Task {i}")
         task = get_task(args.task)
 
-        ys, info = solve_function(args, task, i)
+        ys, info = solve_function(task, i)
 
         # log
         print("ys ", ys)
@@ -82,6 +94,7 @@ def run(args, solve_function):
 
     with open(file_name + "_performance.json", "w") as f:
         json.dump(res_json, f, indent=4)
+        print(f"Performance results saved to {file_name}_performance.json")
 
 
 def parse_args():
@@ -132,8 +145,9 @@ def parse_args():
     args.add_argument("--n_generate_sample", type=int, default=1)  # only thing needed if naive_run
     args.add_argument("--n_evaluate_sample", type=int, default=1)
     args.add_argument("--n_select_sample", type=int, default=1)
-
-    # jinyu
+    args.add_argument(
+        "--solve_method", type=str, choices=["naive", "tot", "speculative_solve", "federated_solve"], default="tot"
+    )
     args.add_argument("--slm_generate", action="store_true", help="use small lm for generation")
     args.add_argument("--slm_eval", action="store_true", help="use small lm for evaluation")
     args.add_argument(
@@ -147,7 +161,9 @@ def parse_args():
         action="store_true",
         help="step 0 uses large model for generation",
     )
-    args.add_argument("--model_config", type=str, default="model_config.json", help="Path to the model configuration file")
+    args.add_argument(
+        "--model_config", type=str, default="model_config.json", help="Path to the model configuration file"
+    )
     args.add_argument("--inference_idx", type=int, default=0, help="Do multiple experiments")
     args.add_argument("--last_lm", action="store_true", help="Use the large model for the last step")
 
@@ -155,3 +171,13 @@ def parse_args():
 
     args = args.parse_args()
     return args
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    if args.filter:
+        print("Filtering enabled. Only runs with specific criteria will be executed.")
+    else:
+        print("No filtering applied. All runs will be executed.")
+
+    run(args, args.solve_method)

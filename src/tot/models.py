@@ -33,14 +33,14 @@ def completions_with_backoff(**kwargs):
 
 def gpt(
     args,
-    prompt,
-    model="gpt-4",
-    temperature=0.9,
-    max_tokens=1000,
-    n=1,
+    prompt: str,
+    model: str | None = "gpt-4",
+    temperature: float = 0.9,
+    max_tokens: int = 1000,
+    n: int = 1,
     stop=None,
-    api_base=openai.api_base,
-    api_key=openai.api_key,
+    api_base: str | None = openai.api_base,
+    api_key: str | None = openai.api_key,
 ) -> list:
     messages = [{"role": "user", "content": prompt}]
     return chatgpt(

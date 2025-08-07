@@ -6,7 +6,7 @@ src/tree_of_thoughts_llm.egg-info/
 *.DS_Store
 /logs
 /logs
-.vscode/launch.json
+.vscode/*
 .gitignore
 test.ipynb
 test.ipynb
