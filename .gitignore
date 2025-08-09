@@ -7,10 +7,10 @@ src/tree_of_thoughts_llm.egg-info/
 /logs
 /logs
 .vscode/*
-.gitignore
 test.ipynb
 test.ipynb
 
 .venv/*
 
 *.log
+eval_150_155
