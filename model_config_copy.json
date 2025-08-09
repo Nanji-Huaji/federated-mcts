@@ -7,8 +7,8 @@
     },
     {
         "client_name": "remote_client",
-        "api_base": "https://api.bltcy.ai/v1",
+        "api_base": "http://127.0.0.1:8001/v1",
         "api_key_environment_variable": "OPENAI_API_KEY",
-        "model": "gpt-4o-2024-08-06"
+        "model": "Qwen-2.5-32B-Instruct"
     }
 ]

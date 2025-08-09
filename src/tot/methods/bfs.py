@@ -13,16 +13,6 @@ from math import ceil
 
 from typing import Tuple, List, Dict, Callable, Union, TypedDict
 
-local_api_key, local_api_base = (
-    "lm-studio",
-    "http://127.0.0.1:11451/v1",
-)  # "meta-llama-3.1-8b-instruct@q4_k_m" #"http://127.0.0.1:11451/v1","bartowski/Phi-3-medium-128k-instruct-GGUF"
-cloud_api_key, cloud_api_base = (
-    "lm-studio",
-    "http://158.132.255.40:1234/v1",
-)  # "Qwen/Qwen2.5-32B-Instruct-GGUF" #"bartowski/Phi-3-medium-128k-instruct-GGUF"
-openai_api_key, openai_api_base, openai_model = os.environ.get("OPENAI_API_KEY"), "https://try-chatapi.com/v1", "gpt-4o"
-
 
 class TaskAssignment(TypedDict):
     solve_client: str  # the client used
@@ -101,14 +91,14 @@ def get_votes(args, task, x, ys, n_evaluate_sample, api_key=None, api_base=None,
     return values
 
 
-def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None):
+def get_proposals_with_check(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None):
     # jinyu:
     need_generate = task.pre_generate_check(y)
     if need_generate == False:  # no need to generate new proposals
         return [y]
 
     new_proposal_list, run_times = [], 0
-    time_constraint, len_constraint = 3, 4
+    time_constraint, len_constraint = 6, 4
 
     while len(new_proposal_list) < len_constraint and run_times < time_constraint:  # Generate at least 4 proposals
 
@@ -140,6 +130,36 @@ def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=Non
     if len(new_proposal_list) == 0:
         return [y]
     return new_proposal_list
+
+
+def get_proposals_without_check(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None):
+    propose_prompt = task.propose_prompt_wrap(x, y)
+    if client is None:
+        proposals = gpt(
+            args,
+            propose_prompt,
+            n=1,
+            stop=None,
+            api_key=api_key,
+            api_base=api_base,
+            model=model,
+        )[
+            0
+        ].split("\n")
+    else:
+        proposals = client(args, propose_prompt, n=1, stop=None)[0].split("\n")
+    return [y + _ + "\n" for _ in proposals]
+
+
+def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None):
+    if args.check_format:
+        return get_proposals_with_check(
+            args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client
+        )
+    else:
+        return get_proposals_without_check(
+            args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client
+        )
 
 
 def get_samples(
@@ -208,124 +228,6 @@ def solve(args, task, idx, to_print=True):
     return ys, {"steps": infos}
 
 
-def solve_usingLLM_eval(args, task, idx, to_print=True):
-    global gpt
-    # Output the imformation of models called
-    gpt = partial(gpt, model=args.localbackend, temperature=args.temperature)
-    global gpt_evaluator
-    gpt_evaluator = partial(
-        gpt,
-        model="gpt-4o",
-        temperature=args.temperature,
-        api_base="https://try-chatapi.com/v1",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-    )
-    print(gpt)
-    print(gpt_evaluator)
-    x = task.get_input(idx)  # input
-    ys = [""]  # current output candidates
-    infos = []
-    local_model = args.localbackend
-    cloud_model = args.remotebackend
-
-    lat_all, lat_generate, lat_eval, lat_select = [], [], [], []
-
-    for step in range(task.steps):
-        step_start_time = time.time()
-
-        # Claim the propose model and value model
-        propose_key, propose_base, propose_model = local_api_key, local_api_base, local_model
-        # choose a propose model
-        if args.warm_start == True and step == 0:
-            propose_key, propose_base, propose_model = openai_api_key, openai_api_base, openai_model
-        elif args.slm_generate == False or step + 1 == task.steps and args.last_lm:
-            propose_key, propose_base, propose_model = cloud_api_key, cloud_api_base, cloud_model
-        # choose a value model
-        value_key, value_base, value_model = local_api_key, local_api_base, local_model
-        if args.slm_eval == False:
-            value_key, value_base, value_model = cloud_api_key, cloud_api_base, cloud_model
-
-        # generation
-        gen_start_time = time.time()
-        if args.method_generate == "sample":  # large model for sample
-            new_ys = [
-                get_samples(
-                    args,
-                    task,
-                    x,
-                    y,
-                    args.n_generate_sample,
-                    prompt_sample=args.prompt_sample,
-                    stop=task.stops[step],
-                    api_key=propose_key,
-                    api_base=propose_base,
-                    model=propose_model,
-                )
-                for y in ys
-            ]
-        elif args.method_generate == "propose":  # large model for propose
-            new_ys = [
-                get_proposals(args, step, task, x, y, api_key=propose_key, api_base=propose_base, model=propose_model)
-                for y in ys
-            ]
-        else:
-            raise Exception("Not match!")
-        new_ys = list(itertools.chain(*new_ys))
-        ids = list(range(len(new_ys)))
-        gen_end_time = time.time()
-        lat_generate.append(gen_end_time - gen_start_time)
-
-        # evaluation
-        eval_start_time = time.time()
-        if args.method_evaluate == "vote":
-            values = get_votes(
-                args, task, x, new_ys, args.n_evaluate_sample, api_key=value_key, api_base=value_base, model=value_model
-            )
-        elif args.method_evaluate == "value":
-            values = get_values(
-                args, task, x, new_ys, args.n_evaluate_sample, api_key=value_key, api_base=value_base, model=value_model
-            )
-        else:
-            raise Exception("Not match!")
-        eval_end_time = time.time()
-        lat_eval.append(eval_end_time - eval_start_time)
-
-        # selection
-        sel_start_time = time.time()
-        if args.method_select == "sample":
-            ps = np.array(values) / sum(values)
-            select_ids = np.random.choice(ids, size=args.n_select_sample, p=ps).tolist()
-        elif args.method_select == "greedy":
-            select_ids = sorted(ids, key=lambda x: values[x], reverse=True)[: args.n_select_sample]
-        select_new_ys = [new_ys[select_id] for select_id in select_ids]
-        sel_end_time = time.time()
-        lat_select.append(sel_end_time - sel_start_time)
-
-        # log
-        if to_print:
-            sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
-            print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
-
-        infos.append(
-            {
-                "step": step,
-                "x": x,
-                "ys": ys,
-                "new_ys": new_ys,
-                "values": values,
-                "select_new_ys": select_new_ys,
-            }
-        )
-        ys = select_new_ys
-        step_end_time = time.time()
-        lat_all.append(step_end_time - step_start_time)
-
-    if to_print:
-        print(ys)
-    lat_dict = {"all": lat_all, "generate": lat_generate, "eval": lat_eval}
-    return ys, {"steps": infos}, lat_dict
-
-
 def naive_solve(args, task, idx, to_print=True, model=None):
     if model is None:
         global gpt
@@ -334,13 +236,6 @@ def naive_solve(args, task, idx, to_print=True, model=None):
     x = task.get_input(idx)  # input
     ys = get_samples(args, task, x, "", args.n_generate_sample, args.prompt_sample, stop=None)
     return ys, {}
-
-
-def list_merge(ys):
-    """
-    Merge a list of lists into one list
-    """
-    return [item for sublist in ys for item in sublist]
 
 
 def naive_assign_task(model_list: List, ys: List) -> List[TaskAssignment]:
@@ -370,6 +265,27 @@ def naive_assign_task(model_list: List, ys: List) -> List[TaskAssignment]:
         assignments.append(
             TaskAssignment(
                 solve_client=client_name, eval_client=client_name, ys=[]  # Same client for both solve and eval
+            )
+        )
+
+    # Distribute ys evenly among clients using round-robin assignment
+    for i, y in enumerate(ys):
+        client_idx = i % len(model_list)
+        assignments[client_idx]["ys"].append(y)
+
+    return assignments
+
+
+def speculative_federated_assign_task(model_list: List, ys: List) -> List[TaskAssignment]:
+    if not model_list:
+        return []
+
+    # Initialize assignments for each client
+    assignments = []
+    for client_name in model_list:
+        assignments.append(
+            TaskAssignment(
+                solve_client=client_name, eval_client="remote_client", ys=[]  # Same client for both solve and eval
             )
         )
 
@@ -572,7 +488,7 @@ class ToTMethods:
         task,
         idx,
         to_print=True,
-        assign_function: Callable[[List[str], List[str]], List[TaskAssignment]] = naive_assign_task,
+        assign_function: Callable[[List[str], List[str]], List[TaskAssignment]] = speculative_federated_assign_task,
         **kwargs,
     ) -> Tuple[List[str], Dict[str, List[Dict[str, str]]]]:
         """

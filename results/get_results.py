@@ -3,7 +3,7 @@ import argparse, json, glob
 import sys
 
 sys.path.append(".")
-from run_usingLLM import parse_args
+from merged_run import parse_args
 
 if __name__ == "__main__":
     args = parse_args()
@@ -27,7 +27,6 @@ if __name__ == "__main__":
     else:
         file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_*"
     file_pattern = file + "_performance.json"
-
 
     matching_files = glob.glob(file_pattern)
 

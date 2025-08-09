@@ -3,7 +3,10 @@ import os
 import sympy
 import pandas as pd
 from tot.tasks.base import Task, DATA_PATH
+
 from tot.prompts.game24 import *  # type: ignore
+
+# from tot.prompts.game24_original_version import *  # type: ignore
 from tot.models import gpt
 from tot.pattern_match import check_final_result
 from tot.pattern_match import check_and_fix_last_line
@@ -36,7 +39,7 @@ class Game24Task(Task):
         path = os.path.join(DATA_PATH, "24", file)
         self.data = list(pd.read_csv(path)["Puzzles"])
         self.value_cache = {}
-        self.steps = 4
+        self.steps = 6
         self.stops = ["\n"] * 4
 
     def __len__(self) -> int:
@@ -79,19 +82,6 @@ class Game24Task(Task):
             return {"r": 0}
 
     @staticmethod
-    def test_output_usingLLM(output: str) -> str:
-        input = output
-        result = gpt(
-            evaluate_the_result.replace("{input}", input),
-            n=1,
-            stop=None,
-            model="gpt-4o",
-            api_base="https://try-chatapi.com/v1",
-            api_key=os.environ.get("OPENAI_API_KEY"),
-        )[0]
-        return result
-
-    @staticmethod
     def standard_prompt_wrap(x: str, y: str = "") -> str:
         return standard_prompt.format(input=x) + y
 
@@ -106,7 +96,7 @@ class Game24Task(Task):
             prompt = cot_prompt.format(input=x) + "Steps:" + y
             # print([prompt])
         else:
-            # prompt = propose_prompt.format(input=current_numbers)
+            prompt = propose_prompt.format(input=current_numbers)
             numbers = current_numbers.split(" ")
             if len(numbers) == 2:
                 prompt = propose_prompt_backup_s2.format(input=current_numbers)
@@ -115,6 +105,16 @@ class Game24Task(Task):
             else:
                 prompt = propose_prompt_backup_s0.format(input=current_numbers)
         return prompt
+
+    # @staticmethod
+    # def propose_prompt_wrap(x: str, y: str = "") -> str:
+    #     current_numbers = get_current_numbers(y if y else x)
+    #     if current_numbers == "24":
+    #         prompt = cot_prompt.format(input=x) + "Steps:" + y
+    #         # print([prompt])
+    #     else:
+    #         prompt = propose_prompt.format(input=current_numbers)
+    #     return prompt
 
     @staticmethod
     def value_prompt_wrap(x: str, y: str) -> str:
