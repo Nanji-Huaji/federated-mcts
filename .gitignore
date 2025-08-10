@@ -2,3 +2,9 @@
 .env
 *.pyc
 *.DS_Store
+
+logs/*
+*.log
+
+.vscode/*
+eval_150_155
