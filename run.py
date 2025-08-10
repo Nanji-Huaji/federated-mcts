@@ -47,7 +47,10 @@ def run(args):
 def parse_args():
     args = argparse.ArgumentParser()
     args.add_argument(
-        "--backend", type=str, choices=["gpt-4", "gpt-3.5-turbo", "qwen-max-2025-01-25"], default="qwen-max-2025-01-25"
+        "--backend",
+        type=str,
+        choices=["gpt-4", "gpt-3.5-turbo", "qwen-max-2025-01-25", "deepseek-v3"],
+        default="deepseek-v3",
     )
     args.add_argument("--temperature", type=float, default=0.7)
 

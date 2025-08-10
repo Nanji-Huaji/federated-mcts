@@ -50,6 +50,8 @@ def gpt_usage(backend="gpt-4"):
         cost = (completion_tokens + prompt_tokens) / 1000 * 0.0002
     elif backend == "qwen-max-2025-01-25":
         cost = (3 * completion_tokens + prompt_tokens) * 0.0024 / 1000
+    elif backend == "deepseek-v3":
+        cost = (4 * completion_tokens + prompt_tokens) * 0.002 / 1000
     else:
         cost = 0.0
 

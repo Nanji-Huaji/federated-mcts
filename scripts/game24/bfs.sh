@@ -1,7 +1,7 @@
 python run.py \
     --task game24 \
     --task_start_index 100 \
-    --task_end_index 105 \
+    --task_end_index 102 \
     --method_generate propose \
     --method_evaluate value \
     --method_select greedy \
