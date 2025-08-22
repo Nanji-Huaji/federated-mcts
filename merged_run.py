@@ -33,7 +33,7 @@ def file_name_generater(args):
     if args.naive_run:
         file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
     else:
-        file = f"./logs/{args.task}/{args.solve_method}/{args.remotebackend}/{args.temperature}_{args.method_generate}{args.n_generate_sample}_{args.method_evaluate}{args.n_evaluate_sample}_{args.method_select}{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
+        file = f"./logs/{args.task}/{args.solve_method}/{args.remotebackend}/{args.temperature}_{args.method_generate}_n_generate_sample_{args.n_generate_sample}_{args.method_evaluate}_n_evaluate_sample_{args.n_evaluate_sample}_method_select_{args.method_select}_n_select_sample_{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
     print(f"File name: {file}.json")
     return file
@@ -71,12 +71,14 @@ def run(args, solve_function):
                 r = {"r": 0}  # Do not count twice
             infos.append(r)
         token_consumption = get_model_usage_summary()
+        time_consumption = totmethod.latency_dict
         info.update(
             {
                 "idx": i,
                 "ys": ys,
                 "infos": infos,
                 "usage_so_far": token_consumption,
+                "time_consumption": time_consumption,
             }
         )
 
@@ -142,7 +144,7 @@ def parse_args():
         default="qwen2.5-32b-instruct",
     )
     args.add_argument("--temperature", type=float, default=0.9)
-    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords"])
+    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords", "gsm8k"])
     args.add_argument("--task_start_index", type=int, default=900)
     args.add_argument("--task_end_index", type=int, default=1000)
     args.add_argument("--naive_run", action="store_true")

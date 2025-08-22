@@ -39,7 +39,7 @@ class Game24Task(Task):
         path = os.path.join(DATA_PATH, "24", file)
         self.data = list(pd.read_csv(path)["Puzzles"])
         self.value_cache = {}
-        self.steps = 6
+        self.steps = 3
         self.stops = ["\n"] * 4
 
     def __len__(self) -> int:

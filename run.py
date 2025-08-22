@@ -3,7 +3,7 @@ import json
 import argparse
 
 from tot.tasks import get_task
-from tot.methods.bfs import solve, naive_solve, solve_usingLLM_eval
+from tot.methods.bfs import solve, naive_solve
 from tot.models import gpt_usage
 
 

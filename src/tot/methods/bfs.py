@@ -119,10 +119,11 @@ def get_proposals_with_check(args, step, task, x, y, api_key=None, api_base=None
             proposals = client(args, propose_prompt, n=1, stop=None)[0].split("\n")
         # jinyu: check the format
         for pro in proposals:
-            is_correct, updated_new_proposal = task.process_generate_result(pro, x, y, args.check_format)
-            if is_correct:
-                if updated_new_proposal not in new_proposal_list:
-                    new_proposal_list.append(updated_new_proposal)
+            if hasattr(task, "process_generate_result"):
+                is_correct, updated_new_proposal = task.process_generate_result(pro, x, y, args.check_format)
+                if is_correct:
+                    if updated_new_proposal not in new_proposal_list:
+                        new_proposal_list.append(updated_new_proposal)
         run_times += 1
 
     if run_times >= time_constraint:
@@ -326,6 +327,12 @@ class ToTMethods:
             )
             for model in self.model_config
         }
+        self.latency_dict = {"generation": 0.0, "evaluation": 0.0}
+        # 添加客户端级别的时间统计
+        self.client_latency_dict = {}
+        for model in self.model_config:
+            client_name = model["client_name"]
+            self.client_latency_dict[client_name] = {"generation": 0.0, "evaluation": 0.0}
 
     def naive_solve(
         self, task, idx, to_print=True, solve_client="remote_client", **kwargs
@@ -399,8 +406,9 @@ class ToTMethods:
         self, task, idx, to_print=True, solve_client=None, eval_client=None, **kwargs
     ) -> Tuple[List[str], Dict[str, List[Dict[str, str]]]]:
         # Output the imformation of models called
-        local_client = self.gpts["solve_client"] if solve_client is None else self.gpts[solve_client]
-        remote_client = self.gpts["eval_client"] if eval_client is None else self.gpts[eval_client]
+        local_client = self.gpts["local_client"] if solve_client is None else self.gpts[solve_client]
+        remote_client = self.gpts["remote_client"] if eval_client is None else self.gpts[eval_client]
+        print(f"local_client: {local_client}, remote_client: {remote_client}")
 
         x = task.get_input(idx)  # input
         ys = [""]  # current output candidates
@@ -414,15 +422,19 @@ class ToTMethods:
             if self.args.warm_start == True and step == 0:
                 solve_client = remote_client
                 eval_client = remote_client
-            elif self.args.slm_generate == False or step + 1 == task.steps and self.args.last_lm:
+            # elif self.args.slm_generate == False or step + 1 == task.steps and self.args.last_lm:
+            elif step + 1 == task.steps and self.args.last_lm:
                 solve_client = remote_client
                 eval_client = remote_client
             # choose a value model
             eval_client = remote_client
             if self.args.slm_eval:
                 eval_client = local_client
-
+            print(
+                f"Step {step} of {task.steps} in Task {idx}, solve_client: {solve_client}, eval_client: {eval_client}"
+            )
             # generation
+            start_time = time.time()
             if self.args.method_generate == "sample":  # large model for sample
                 new_ys = [
                     get_samples(
@@ -443,14 +455,19 @@ class ToTMethods:
                 raise Exception("Not match!")
             new_ys = list(itertools.chain(*new_ys))
             ids = list(range(len(new_ys)))
+            end_time = time.time()
+            self.latency_dict["generation"] += end_time - start_time
 
             # evaluation
+            start_time = time.time()
             if self.args.method_evaluate == "vote":
                 values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_client)
             elif self.args.method_evaluate == "value":
                 values = get_values(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_client)
             else:
                 raise Exception("Not match!")
+            end_time = time.time()
+            self.latency_dict["evaluation"] += end_time - start_time
 
             # selection
             if self.args.method_select == "sample":
@@ -507,6 +524,11 @@ class ToTMethods:
             if to_print:
                 print(f"Step {step} of {task.steps} in Task {idx}")
 
+            # 初始化本步骤的客户端时间统计
+            step_client_times = {}
+            for client_name in client_names:
+                step_client_times[client_name] = {"generation": 0.0, "evaluation": 0.0}
+
             # Assign tasks to clients
             task_assignments = assign_function(client_names, ys)
 
@@ -523,7 +545,7 @@ class ToTMethods:
                         )
 
                     # Generate proposals for this client
-                    client_new_ys, client_values, client_info = self._client_step(
+                    client_new_ys, client_values, client_info, client_times = self._client_step(
                         task,
                         x,
                         assignment["ys"],
@@ -536,9 +558,21 @@ class ToTMethods:
                         ),
                     )
 
+                    # 累加客户端时间
+                    step_client_times[assignment["solve_client"]]["generation"] += client_times["generation"]
+                    step_client_times[assignment["eval_client"]]["evaluation"] += client_times["evaluation"]
+
                     all_new_ys.extend(client_new_ys)
                     all_values.extend(client_values)
                     step_infos.append(client_info)
+
+            # 计算本步骤的最大生成和评估时间
+            max_generation_time = max(step_client_times[client]["generation"] for client in step_client_times.keys())
+            max_evaluation_time = max(step_client_times[client]["evaluation"] for client in step_client_times.keys())
+
+            # 累加到总时间
+            self.latency_dict["generation"] += max_generation_time
+            self.latency_dict["evaluation"] += max_evaluation_time
 
             # If no new proposals generated, keep current ys
             if not all_new_ys:
@@ -576,6 +610,7 @@ class ToTMethods:
                     "select_new_ys": select_new_ys,
                     "client_infos": step_infos,
                     "task_assignments": task_assignments,
+                    "step_client_times": step_client_times,  # 添加步骤时间统计
                 }
             )
 
@@ -615,7 +650,12 @@ class ToTMethods:
         new_ys = []
         n_generate_sample = n_generate_sample if n_generate_sample else self.args.n_generate_sample
 
+        # 记录时间
+        generation_time = 0.0
+        evaluation_time = 0.0
+
         # Generation
+        start_time = time.time()
         for y in client_ys:
             if self.args.method_generate == "sample":
                 samples = get_samples(
@@ -632,6 +672,7 @@ class ToTMethods:
             elif self.args.method_generate == "propose":
                 proposals = get_proposals(self.args, step, task, x, y, client=solve_gpt)
                 new_ys.extend(proposals)
+        generation_time = time.time() - start_time
 
         # Remove duplicates while preserving order
         unique_new_ys = []
@@ -643,6 +684,7 @@ class ToTMethods:
         new_ys = unique_new_ys
 
         # Evaluation
+        start_time = time.time()
         if new_ys:
             if self.args.method_evaluate == "vote":
                 values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
@@ -652,6 +694,7 @@ class ToTMethods:
                 values = [1.0] * len(new_ys)  # Default values
         else:
             values = []
+        evaluation_time = time.time() - start_time
 
         client_info = {
             "solve_client_name": solve_client_name,
@@ -662,9 +705,14 @@ class ToTMethods:
             "step": step,
         }
 
+        client_times = {
+            "generation": generation_time,
+            "evaluation": evaluation_time,
+        }
+
         if to_print:
             print(
                 f"Client {solve_client_name} (eval: {eval_client_name}) generated {len(new_ys)} proposals with values {values[:5]}"
             )
 
-        return new_ys, values, client_info
+        return new_ys, values, client_info, client_times
