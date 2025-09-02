@@ -48,7 +48,7 @@ class Game24Task(Task):
     def get_input(self, idx: int) -> str:
         return self.data[idx]
 
-    def test_output_modfiy(self, idx: int, output: str):
+    def test_output_modify(self, idx: int, output: str):
         problem_numbers = re.findall(r"\d+", self.data[idx])
         x = problem_numbers[0] + " " + problem_numbers[1] + " " + problem_numbers[2] + " " + problem_numbers[3]
         split_output = output.split("\n")

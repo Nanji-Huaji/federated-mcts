@@ -64,7 +64,7 @@ def run(args, solve_function):
         print("ys ", ys)
         infos, output_list = [], []
         for y in ys:
-            r, new_output = task.test_output_modfiy(i, y)  # type: ignore
+            r, new_output = task.test_output_modify(i, y)  # type: ignore
             if new_output not in output_list:  # Avoid duplication of outputs
                 output_list.append(new_output)
             else:

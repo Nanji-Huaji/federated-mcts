@@ -3,6 +3,43 @@ import openai
 import backoff
 from collections import defaultdict
 
+from typing import List, Tuple
+
+import src.tot.methods.uncertainty as uncertainty
+# TODO: 完成早停功能
+
+EARLY_STOP_FUNCTION = {
+    "name": "trigger_early_stop",
+    "description": "当发现当前思维路径已经足够好或无需进一步探索时，触发早停机制直接跳到最终总结步骤",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "description": "触发早停的原因，例如：'已找到最优解'、'当前路径质量足够高'、'进一步探索无意义'等"
+            },
+            "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "对当前思维质量的信心程度，0-1之间的数值"
+            }
+        },
+        "required": ["reason", "confidence"]
+    }
+}
+
+class EarlyStopException(Exception):
+    """早停异常类"""
+    def __init__(self, reason, confidence):
+        self.reason = reason
+        self.confidence = confidence
+        super().__init__(f"Early stop triggered: {reason} (confidence: {confidence})")
+
+
+uncertainty_calculator = uncertainty.Uncertainty(uncertainty_threshold=0.8, uncertainty_method="entropy")
+
+
 # 全局模型统计字典 - 动态添加模型统计
 model_usage = defaultdict(lambda: {"completion_tokens": 0, "prompt_tokens": 0, "total_calls": 0})
 
@@ -41,7 +78,9 @@ def gpt(
     stop=None,
     api_base: str | None = openai.api_base,
     api_key: str | None = openai.api_key,
-) -> list:
+    get_logprobs: bool = False,  # 新增参数
+    top_logprobs: int = 0,
+):
     messages = [{"role": "user", "content": prompt}]
     return chatgpt(
         args,
@@ -66,9 +105,8 @@ def chatgpt(
     stop=None,
     api_base=openai.api_base,
     api_key=openai.api_key,
-) -> list:
+):
     global completion_tokens, prompt_tokens, slm_completion_tokens, slm_prompt_tokens, llm_completion_tokens, llm_prompt_tokens, model_usage
-
     outputs = []
     while n > 0:
         cnt = min(n, 20)
@@ -88,16 +126,13 @@ def chatgpt(
         # 统计token使用量
         completion_tokens_used = res["usage"]["completion_tokens"]
         prompt_tokens_used = res["usage"]["prompt_tokens"]
-
         # 更新全局统计（向后兼容）
         completion_tokens += completion_tokens_used
         prompt_tokens += prompt_tokens_used
-
         # 更新模型特定统计
         model_usage[model]["completion_tokens"] += completion_tokens_used
         model_usage[model]["prompt_tokens"] += prompt_tokens_used
         model_usage[model]["total_calls"] += 1
-
         # 为了向后兼容，继续更新原有的分类统计
         if hasattr(args, "remotebackend") and model == args.remotebackend:
             llm_completion_tokens += completion_tokens_used

@@ -11,7 +11,11 @@ import json
 
 from math import ceil
 
+from src.model.draft_model import DraftModel
+
 from typing import Tuple, List, Dict, Callable, Union, TypedDict
+
+import src.tot.methods.uncertainty as uncertainty
 
 
 class TaskAssignment(TypedDict):
@@ -41,6 +45,8 @@ def get_value(
         )
     else:
         value_outputs = client(args, value_prompt, n=n_evaluate_sample, stop=None)
+    if isinstance(value_outputs, tuple):
+        value_outputs = value_outputs[0]
     value = task.value_outputs_unwrap(x, y, value_outputs)
     if cache_value:
         task.value_cache[value_prompt] = value
@@ -57,7 +63,7 @@ def get_values(
             value = 0
         else:
             # jinyu
-            value, final = task.pre_value_check(y, args.eval_rule)
+            value, final = task.pre_value_check(y, args.eval_rule) if hasattr(task, "pre_value_check") else (0, False)
             if value == 0 and final == False:
                 count = 0
                 while value == 0 and count < 2:
@@ -87,13 +93,15 @@ def get_votes(args, task, x, ys, n_evaluate_sample, api_key=None, api_base=None,
         )
     else:
         vote_outputs = client(args, vote_prompt, n=n_evaluate_sample, stop=None)
+    if isinstance(vote_outputs, tuple):
+        vote_outputs = vote_outputs[0]
     values = task.vote_outputs_unwrap(vote_outputs, len(ys))
     return values
 
 
 def get_proposals_with_check(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None):
     # jinyu:
-    need_generate = task.pre_generate_check(y)
+    need_generate = task.pre_generate_check(y) if hasattr(task, "pre_generate_check") else True
     if need_generate == False:  # no need to generate new proposals
         return [y]
 
@@ -119,7 +127,7 @@ def get_proposals_with_check(args, step, task, x, y, api_key=None, api_base=None
             proposals = client(args, propose_prompt, n=1, stop=None)[0].split("\n")
         # jinyu: check the format
         for pro in proposals:
-            if hasattr(task, "process_generate_result"):
+            if hasattr(task, "process_generate_result") and args.check_format:
                 is_correct, updated_new_proposal = task.process_generate_result(pro, x, y, args.check_format)
                 if is_correct:
                     if updated_new_proposal not in new_proposal_list:
@@ -144,27 +152,39 @@ def get_proposals_without_check(args, step, task, x, y, api_key=None, api_base=N
             api_key=api_key,
             api_base=api_base,
             model=model,
-        )[
-            0
-        ].split("\n")
+        )[0].split("\n")
     else:
         proposals = client(args, propose_prompt, n=1, stop=None)[0].split("\n")
     return [y + _ + "\n" for _ in proposals]
 
 
-def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None):
+def get_proposals_with_logits(args, step, task, x, y, draft_model):
+    pass
+
+def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None, get_logprobs=False):
     if args.check_format:
         return get_proposals_with_check(
-            args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client
+            args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client, get_logprobs=get_logprobs
         )
-    else:
-        return get_proposals_without_check(
-            args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client
-        )
+    # else:
+    #     return get_proposals_without_check(
+    #         args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client
+    #     )
 
 
 def get_samples(
-    args, task, x, y, n_generate_sample, prompt_sample, stop, api_key=None, api_base=None, model=None, client=None
+    args,
+    task,
+    x,
+    y,
+    n_generate_sample,
+    prompt_sample,
+    stop,
+    api_key=None,
+    api_base=None,
+    model=None,
+    client=None,
+    get_logprobs=False,
 ):
     if prompt_sample == "standard":
         prompt = task.standard_prompt_wrap(x, y)
@@ -172,11 +192,39 @@ def get_samples(
         prompt = task.cot_prompt_wrap(x, y)
     else:
         raise ValueError(f"prompt_sample {prompt_sample} not recognized")
+
     if client is None:
-        samples = gpt(args, prompt, n=n_generate_sample, stop=stop, api_key=api_key, api_base=api_base, model=model)
+        samples_result = gpt(
+            args,
+            prompt,
+            n=n_generate_sample,
+            stop=stop,
+            api_key=api_key,
+            api_base=api_base,
+            model=model,
+            logprobs=get_logprobs,
+        )
     else:
-        samples = client(args, prompt, n=n_generate_sample, stop=stop)
-    return [y + _ for _ in samples]
+        samples_result = client(args, prompt, n=n_generate_sample, stop=stop, get_logprobs=get_logprobs)
+
+    if get_logprobs:
+        if isinstance(samples_result, tuple):
+            samples, logprobs = samples_result
+        else:
+            # 兼容性处理，如果返回格式不正确
+            samples = samples_result
+            logprobs = [0.0] * len(samples)
+
+        # 返回拼接后的samples和对应的logprobs
+        final_samples = [y + _ for _ in samples]
+        return final_samples, logprobs
+    else:
+        if isinstance(samples_result, tuple):
+            samples, logprobs = samples_result
+        else:
+            samples = samples_result
+
+        return [y + _ for _ in samples]
 
 
 def solve(args, task, idx, to_print=True):
@@ -333,6 +381,10 @@ class ToTMethods:
         for model in self.model_config:
             client_name = model["client_name"]
             self.client_latency_dict[client_name] = {"generation": 0.0, "evaluation": 0.0}
+
+    # TODO: Add early stop function for function calling
+    def early_stop(self, task):
+        pass
 
     def naive_solve(
         self, task, idx, to_print=True, solve_client="remote_client", **kwargs
@@ -500,6 +552,10 @@ class ToTMethods:
             print(ys)
         return ys, {"steps": infos}
 
+    def uncertainty_solve(self, task, idx, to_print=True, draft_model: DraftModel, eval_client="remote_client", **kwargs):
+        pass
+
+    
     def federated_solve(
         self,
         task,
@@ -631,6 +687,8 @@ class ToTMethods:
         eval_client_name,
         to_print=False,
         n_generate_sample=int | None,
+        uncertainty_backoff=False,
+        uncertainty_threshold=0.8,
     ):
         """
         Execute one step for a specific client
@@ -645,6 +703,10 @@ class ToTMethods:
             to_print: Whether to print debug information
             n_generate_sample: Number of samples to generate
         """
+
+        uncertainty_calculator = uncertainty.Uncertainty(uncertainty_threshold=uncertainty_threshold, uncertainty_method="entropy")
+        
+
         solve_gpt = self.gpts[solve_client_name]
         eval_gpt = self.gpts[eval_client_name]
         new_ys = []
@@ -658,7 +720,7 @@ class ToTMethods:
         start_time = time.time()
         for y in client_ys:
             if self.args.method_generate == "sample":
-                samples = get_samples(
+                result = get_samples(
                     self.args,
                     task,
                     x,
@@ -667,11 +729,56 @@ class ToTMethods:
                     prompt_sample=self.args.prompt_sample,
                     stop=task.stops[step],
                     client=solve_gpt,
+                    get_logprobs=uncertainty_backoff,
                 )
+                if uncertainty_backoff:
+                    samples, logprobs = result
+                    uncertainty_scores = uncertainty_calculator.calculate_uncertainty(logprobs)
+                    # 选择不确定性高于阈值的samples进行补充生成
+                    filtered_samples = [
+                        sample for sample, score in zip(samples, uncertainty_scores) if score >= uncertainty_threshold
+                    ]
+                    if len(filtered_samples) < self.args.n_generate_sample:
+                        # 需要补充生成
+                        additional_needed = self.args.n_generate_sample - len(filtered_samples)
+                        additional_samples, _ = get_samples(
+                            self.args,
+                            task,
+                            x,
+                            y,
+                            n_generate_sample=additional_needed,
+                            prompt_sample=self.args.prompt_sample,
+                            stop=task.stops[step],
+                            client=solve_gpt,
+                            get_logprobs=False,
+                        )
+                        filtered_samples.extend(additional_samples)
+                    samples = filtered_samples[: self.args.n_generate_sample]
+                else:
+                    samples = result
                 new_ys.extend(samples)
             elif self.args.method_generate == "propose":
-                proposals = get_proposals(self.args, step, task, x, y, client=solve_gpt)
+                result = get_proposals(self.args, step, task, x, y, client=solve_gpt, get_logprobs=uncertainty_backoff)
+                if uncertainty_backoff:
+                    assert result is not None, "Proposals should not be None when using uncertainty backoff"
+                    proposals, logprobs = result
+                    uncertainty_scores = uncertainty_calculator.calculate_uncertainty(logprobs)
+                    # 选择不确定性高于阈值的proposal进行补充生成
+                    filtered_proposals = [
+                        proposal for proposal, score in zip(proposals, uncertainty_scores) if score >= uncertainty_threshold
+                    ]
+                    if len(filtered_proposals) < self.args.n_generate_sample:
+                        # 需要补充生成
+                        additional_needed = self.args.n_generate_sample - len(filtered_proposals)
+                        additional_proposals = get_proposals(
+                            self.args, step, task, x, y, client=solve_gpt, get_logprobs=False
+                        )
+                        filtered_proposals.extend(additional_proposals)
+                    proposals = filtered_proposals[: self.args.n_generate_sample]
+                else:
+                    proposals = result
                 new_ys.extend(proposals)
+                
         generation_time = time.time() - start_time
 
         # Remove duplicates while preserving order
