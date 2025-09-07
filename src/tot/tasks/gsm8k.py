@@ -10,10 +10,14 @@ def extract_answer(text: str) -> str:
     """从答案文本中提取最终数值"""
     # 寻找 #### 格式的答案
     if "####" in text:
-        return text.split("####")[-1].strip()
-
+        answer_part = text.split("####")[-1].strip()
+        # 从答案部分提取第一个数字
+        numbers = re.findall(r"-?\d+(?:\.\d+)?", answer_part)
+        if numbers:
+            return numbers[0]
+    
     # 寻找最后一个数字
-    numbers = re.findall(r"-?\d+\.?\d*", text)
+    numbers = re.findall(r"-?\d+(?:\.\d+)?", text)
     return numbers[-1] if numbers else ""
 
 
@@ -53,7 +57,7 @@ class GSM8KTask(Task):
                 self.data.append(item)
 
         self.value_cache = {}
-        self.steps = 6  # GSM8K问题通常需要更多步骤
+        self.steps = 4  # GSM8K问题通常需要更多步骤
         self.stops = ["\n"] * 6
 
     def __len__(self) -> int:
@@ -71,7 +75,8 @@ class GSM8KTask(Task):
             true_answer = extract_answer(self.data[idx]["answer"])
 
             if not predicted_answer or not true_answer:
-                return {"r": 0}
+                print(f"Failed to extract answers: pred='{predicted_answer}', true='{true_answer}'")
+                return {"r": 0}, output
 
             # 转换为数值比较
             pred_num = float(predicted_answer.replace(",", ""))
@@ -81,11 +86,13 @@ class GSM8KTask(Task):
             tolerance = max(0.01, abs(true_num) * 0.001)  # 相对误差0.1%或绝对误差0.01
             is_correct = abs(pred_num - true_num) <= tolerance
 
-            return {"r": 1 if is_correct else 0}
+            return {"r": 1 if is_correct else 0}, output
 
         except Exception as e:
             print(f"Error in test_output: {e}")
-            return {"r": 0}
+            print(f"Output: {repr(output)}")
+            print(f"Predicted answer: {repr(predicted_answer if 'predicted_answer' in locals() else 'N/A')}")
+            return {"r": 0}, output
 
     def test_output_modify(self, idx: int, output: str):
         return self.test_output(idx, output)
@@ -93,6 +100,12 @@ class GSM8KTask(Task):
     @staticmethod
     def standard_prompt_wrap(x: str, y: str = "") -> str:
         return standard_prompt.format(input=x) + y
+
+    @staticmethod
+    def pre_generate_check(y):
+        if "####" in y:
+            return False
+        return True
 
     @staticmethod
     def cot_prompt_wrap(x: str, y: str = "") -> str:
@@ -110,19 +123,25 @@ class GSM8KTask(Task):
     @staticmethod
     def value_prompt_wrap(x: str, y: str) -> str:
         if "####" in y:  # 最后一步，评估完整解答
+            # print(f"{value_last_step_prompt.format(input=x, answer=y.strip())}")
+            # print("----------------------------")
             return value_last_step_prompt.format(input=x, answer=y.strip())
         else:
             current_progress = get_current_progress(y)
+            # print(f"{value_prompt.format(input=x, current_progress=current_progress)}")
+            # print("----------------------------")
             return value_prompt.format(input=x, current_progress=current_progress)
 
     @staticmethod
     def value_outputs_unwrap(x: str, y: str, value_outputs: list) -> float:
+        print(f"Value outputs: {value_outputs}")
+        print("----------------------------")
         # 如果没有最终答案，评分较低
         if "####" not in y and len(y.strip().split("\n")) >= 5:
             return 0.1
 
         value_names = [_.split("\n")[-1].strip().lower() for _ in value_outputs]
-        value_map = {"impossible": 0.001, "unlikely": 0.1, "likely": 1, "sure": 20}
+        value_map = {"impossible": 0.001, "unlikely": 0.1, "likely": 1, "sure": 20, "s": 20, "un": 0.1}
 
         value = sum(value * value_names.count(name) for name, value in value_map.items())
         return value

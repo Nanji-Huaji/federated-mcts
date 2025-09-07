@@ -144,7 +144,7 @@ def parse_args():
         default="qwen2.5-32b-instruct",
     )
     args.add_argument("--temperature", type=float, default=0.9)
-    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords", "gsm8k"])
+    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords", "gsm8k", "aime", "multilogieval"])
     args.add_argument("--task_start_index", type=int, default=900)
     args.add_argument("--task_end_index", type=int, default=1000)
     args.add_argument("--naive_run", action="store_true")

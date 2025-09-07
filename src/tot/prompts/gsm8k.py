@@ -115,18 +115,20 @@ EVALUATION CRITERIA:
 - Is the format clear and organized?
 - If complete, does it end with #### [number]?
 
+Please respond with one of: sure, likely, unlikely, impossible. Do not answer anything else. 
+
 Problem: Janet's ducks lay 16 eggs per day. She eats 3 for breakfast and uses 4 for muffins. How much does she make selling the rest at $2 each?
 Progress: Janet starts with 16 eggs
 She eats 3 eggs for breakfast
 Eggs after breakfast: 16 - 3 = 13 eggs
-Judge: Good start with correct setup and first calculation. On track to solve the problem.
+Judge:
 sure
 
 Problem: A store has 24 books. If 1/3 are fiction and 1/4 are non-fiction, how many are reference books?
 Progress: Fiction books: 24 × 1/3 = 8 books
 Non-fiction books: 24 × 1/4 = 6 books
 Total fiction and non-fiction: 8 + 6 = 14 books
-Judge: Calculations are correct and logical. Ready for final step to find reference books.
+Judge:
 sure
 
 Problem: Tom runs 5 miles in 40 minutes. What is his speed in miles per hour?
@@ -134,13 +136,13 @@ Progress: Distance: 5 miles
 Time: 40 minutes = 40/60 hours = 2/3 hours  
 Speed: 5 ÷ (2/3) = 5 × 3/2 = 7.5 miles per hour
 #### 7.5
-Judge: Complete solution with correct unit conversion and final answer format.
+Judge:
 sure
 
 Problem: Lisa buys 3 notebooks at $4 each. How much does she spend?
 Progress: Cost per notebook: $4
 Number of notebooks: 3
-Judge: Setup is correct but missing the actual calculation step.
+Judge:
 likely
 
 Problem: {input}
@@ -157,29 +159,26 @@ EVALUATION CRITERIA:
 - Is it formatted properly with #### [number]?
 - Does it answer the specific question asked?
 
+Please respond with one of: sure, impossible. Do not answer anything else.
+
 Problem: Janet's ducks lay 16 eggs per day. She eats 3 for breakfast and uses 4 for muffins. She sells the rest at $2 each. How much does she make?
 Solution: Janet starts with 16 eggs. She eats 3 and uses 4 for muffins. Eggs left: 16 - 3 - 4 = 9. She sells them at $2 each: 9 × 2 = 18. #### 18
-Judge: Mathematical reasoning is correct, final answer is correct, and format is proper.
+Judge:
 sure
 
 Problem: A robe takes 2 bolts of blue fiber and half that much white fiber. How many bolts total?
 Solution: Blue fiber: 2 bolts. White fiber: 2 ÷ 2 = 1 bolt. Total: 2 + 1 = 3 bolts. #### 3
-Judge: Correct calculation and proper format.
+Judge:
 sure
 
 Problem: Tom has 12 apples and gives away 1/4. How many does he have left?
 Solution: Tom gives away 12 × 1/4 = 3 apples. He has 12 - 3 = 8 apples left. #### 8
-Judge: Wait, let me check: 12 × 1/4 = 3, so 12 - 3 = 9, not 8. The final answer is incorrect.
-impossible
-
-Problem: Sarah earns $15 per hour and works 8 hours. How much does she earn?
-Solution: Sarah works 8 hours at $15 per hour. Total earnings: 8 × 15 = 120 dollars.
-Judge: Calculation is correct but missing the required #### format for final answer.
+Judge:
 impossible
 
 Problem: A store has 30 items. 20% are damaged. How many items are not damaged?
 Solution: Damaged items: 30 × 0.2 = 6 items. Non-damaged items: 30 - 6 = 24 items. #### 24
-Judge: Mathematical reasoning is sound, answer is correct, format is proper.
+Judge:
 sure
 
 Problem: {input}

@@ -11,7 +11,7 @@ import json
 
 from math import ceil
 
-from src.model.draft_model import DraftModel
+# from src.model.draft_model import DraftModel
 
 from typing import Tuple, List, Dict, Callable, Union, TypedDict
 
@@ -41,9 +41,10 @@ def get_value(
         return task.value_cache[value_prompt]
     if client is None:
         value_outputs = gpt(
-            args, value_prompt, n=n_evaluate_sample, stop=None, api_key=api_key, api_base=api_base, model=model
+            args, value_prompt, n=n_evaluate_sample, stop=None, api_key=api_key, api_base=api_base, model=model, enable_early_stop=True
         )
     else:
+        client = partial(client, enable_early_stop=True)
         value_outputs = client(args, value_prompt, n=n_evaluate_sample, stop=None)
     if isinstance(value_outputs, tuple):
         value_outputs = value_outputs[0]
@@ -99,7 +100,7 @@ def get_votes(args, task, x, ys, n_evaluate_sample, api_key=None, api_base=None,
     return values
 
 
-def get_proposals_with_check(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None):
+def get_proposals_with_check(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None, **kwargs):
     # jinyu:
     need_generate = task.pre_generate_check(y) if hasattr(task, "pre_generate_check") else True
     if need_generate == False:  # no need to generate new proposals
@@ -141,7 +142,7 @@ def get_proposals_with_check(args, step, task, x, y, api_key=None, api_base=None
     return new_proposal_list
 
 
-def get_proposals_without_check(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None):
+def get_proposals_without_check(args, step, task, x, y, api_key=None, api_base=None, model=None, client=None, **kwargs):
     propose_prompt = task.propose_prompt_wrap(x, y)
     if client is None:
         proposals = gpt(
@@ -166,10 +167,10 @@ def get_proposals(args, step, task, x, y, api_key=None, api_base=None, model=Non
         return get_proposals_with_check(
             args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client, get_logprobs=get_logprobs
         )
-    # else:
-    #     return get_proposals_without_check(
-    #         args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client
-    #     )
+    else:
+        return get_proposals_without_check(
+            args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client
+        )
 
 
 def get_samples(
@@ -382,6 +383,8 @@ class ToTMethods:
             client_name = model["client_name"]
             self.client_latency_dict[client_name] = {"generation": 0.0, "evaluation": 0.0}
 
+        
+
     # TODO: Add early stop function for function calling
     def early_stop(self, task):
         pass
@@ -552,8 +555,8 @@ class ToTMethods:
             print(ys)
         return ys, {"steps": infos}
 
-    def uncertainty_solve(self, task, idx, to_print=True, draft_model: DraftModel, eval_client="remote_client", **kwargs):
-        pass
+#    def uncertainty_solve(self, task, idx, to_print=True, draft_model: DraftModel, eval_client="remote_client", **kwargs):
+#       pass
 
     
     def federated_solve(

@@ -68,6 +68,94 @@ def completions_with_backoff(**kwargs):
     return openai.ChatCompletion.create(**kwargs)
 
 
+def chatgpt(
+    args,
+    messages,
+    model="gpt-4",
+    temperature=0.5,
+    max_tokens=3072,
+    n=1,
+    stop=None,
+    api_base=openai.api_base,
+    api_key=openai.api_key,
+    enable_early_stop=False,  # 新增参数，控制是否启用早停功能
+    **kwargs
+):
+    global completion_tokens, prompt_tokens, slm_completion_tokens, slm_prompt_tokens, llm_completion_tokens, llm_prompt_tokens, model_usage
+    outputs = []
+    
+    # 构建函数调用参数
+    function_params = {}
+    if enable_early_stop:
+        function_params["functions"] = [EARLY_STOP_FUNCTION]
+        function_params["function_call"] = "auto"  # 让模型自动决定是否调用函数
+    
+    while n > 0:
+        cnt = min(n, 20)
+        n -= cnt
+        
+        # 构建API调用参数
+        api_params = {
+            "model": model,
+            "messages": messages,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "n": cnt,
+            "stop": stop,
+            "api_base": api_base,
+            "api_key": api_key,
+            **function_params  # 添加函数调用参数
+        }
+        
+        res = completions_with_backoff(**api_params)
+        
+        # 处理响应
+        for choice in res["choices"]:
+            # 检查是否有函数调用
+            if "function_call" in choice["message"]:
+                function_call = choice["message"]["function_call"]
+                if function_call["name"] == "trigger_early_stop":
+                    # 解析函数参数
+                    import json
+                    try:
+                        params = json.loads(function_call["arguments"])
+                        reason = params.get("reason", "Unknown reason")
+                        confidence = params.get("confidence", 0.0)
+                        # 抛出早停异常
+                        raise EarlyStopException(reason, confidence)
+                    except json.JSONDecodeError:
+                        print("Warning: Failed to parse early stop function arguments")
+            
+            # 获取常规文本响应
+            content = choice["message"].get("content", "")
+            if content:  # 只有当有内容时才添加
+                outputs.append(content)
+
+        # 统计token使用量
+        completion_tokens_used = res["usage"]["completion_tokens"]
+        prompt_tokens_used = res["usage"]["prompt_tokens"]
+        # 更新全局统计（向后兼容）
+        completion_tokens += completion_tokens_used
+        prompt_tokens += prompt_tokens_used
+        # 更新模型特定统计
+        model_usage[model]["completion_tokens"] += completion_tokens_used
+        model_usage[model]["prompt_tokens"] += prompt_tokens_used
+        model_usage[model]["total_calls"] += 1
+        
+        if hasattr(args, "remotebackend") and model == args.remotebackend:
+            llm_completion_tokens += completion_tokens_used
+            llm_prompt_tokens += prompt_tokens_used
+        elif hasattr(args, "localbackend") and model == args.localbackend:
+            slm_completion_tokens += completion_tokens_used
+            slm_prompt_tokens += prompt_tokens_used
+
+    if 'deepseek' in model:
+        print(outputs)
+        print('----------------------------')
+
+    return outputs
+
+
 def gpt(
     args,
     prompt: str,
@@ -78,8 +166,10 @@ def gpt(
     stop=None,
     api_base: str | None = openai.api_base,
     api_key: str | None = openai.api_key,
-    get_logprobs: bool = False,  # 新增参数
+    get_logprobs: bool = False,
     top_logprobs: int = 0,
+    enable_early_stop: bool = False,  # 新增参数
+    **kwargs
 ):
     messages = [{"role": "user", "content": prompt}]
     return chatgpt(
@@ -92,56 +182,8 @@ def gpt(
         stop=stop,
         api_base=api_base,
         api_key=api_key,
+        enable_early_stop=enable_early_stop,  # 传递早停参数
     )
-
-
-def chatgpt(
-    args,
-    messages,
-    model="gpt-4",
-    temperature=0.5,
-    max_tokens=1000,
-    n=1,
-    stop=None,
-    api_base=openai.api_base,
-    api_key=openai.api_key,
-):
-    global completion_tokens, prompt_tokens, slm_completion_tokens, slm_prompt_tokens, llm_completion_tokens, llm_prompt_tokens, model_usage
-    outputs = []
-    while n > 0:
-        cnt = min(n, 20)
-        n -= cnt
-        res = completions_with_backoff(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            n=cnt,
-            stop=stop,
-            api_base=api_base,
-            api_key=api_key,
-        )
-        outputs.extend([choice["message"]["content"] for choice in res["choices"]])
-
-        # 统计token使用量
-        completion_tokens_used = res["usage"]["completion_tokens"]
-        prompt_tokens_used = res["usage"]["prompt_tokens"]
-        # 更新全局统计（向后兼容）
-        completion_tokens += completion_tokens_used
-        prompt_tokens += prompt_tokens_used
-        # 更新模型特定统计
-        model_usage[model]["completion_tokens"] += completion_tokens_used
-        model_usage[model]["prompt_tokens"] += prompt_tokens_used
-        model_usage[model]["total_calls"] += 1
-        # 为了向后兼容，继续更新原有的分类统计
-        if hasattr(args, "remotebackend") and model == args.remotebackend:
-            llm_completion_tokens += completion_tokens_used
-            llm_prompt_tokens += prompt_tokens_used
-        elif hasattr(args, "localbackend") and model == args.localbackend:
-            slm_completion_tokens += completion_tokens_used
-            slm_prompt_tokens += prompt_tokens_used
-
-    return outputs
 
 
 def get_model_usage_summary():
