@@ -17,11 +17,12 @@ def get_task(name):
         return GSM8KTask()
     elif name == "aime":
         from tot.tasks.aime import AIMETask
+
         return AIMETask()
     elif name == "multilogieval":
         from tot.tasks.multilogieval import MultiLogicEvalTask
+
         return MultiLogicEvalTask()
 
-       
     else:
         raise NotImplementedError

@@ -113,19 +113,27 @@ def get_proposals_with_check(args, step, task, x, y, api_key=None, api_base=None
 
         propose_prompt = task.propose_prompt_wrap(x, y)
         if client is None:
-            proposals = gpt(
-                args,
-                propose_prompt,
-                n=1,
-                stop=None,
-                api_key=api_key,
-                api_base=api_base,
-                model=model,
-            )[
-                0
-            ].split("\n")
+            try:
+                proposals = gpt(
+                    args,
+                    propose_prompt,
+                    n=1,
+                    stop=None,
+                    api_key=api_key,
+                    api_base=api_base,
+                    model=model,
+                )[
+                    0
+                ].split("\n")
+            except IndexError as e:
+                print(f"IndexError: {e}, retrying...")
+                proposals = []
         else:
-            proposals = client(args, propose_prompt, n=1, stop=None)[0].split("\n")
+            try:
+                proposals = client(args, propose_prompt, n=1, stop=None)[0].split("\n")
+            except IndexError as e:
+                print(f"IndexError: {e}, retrying...")
+                proposals = []
         # jinyu: check the format
         for pro in proposals:
             if hasattr(task, "process_generate_result") and args.check_format:
@@ -284,7 +292,7 @@ def naive_solve(args, task, idx, to_print=True, model=None):
         gpt = partial(gpt, model=args.localbackend, temperature=args.temperature)
     print(gpt)
     x = task.get_input(idx)  # input
-    ys = get_samples(args, task, x, "", args.n_generate_sample, args.prompt_sample, stop=None)
+    ys = get_samples(args, task, x, "", args.n_generate_sample, args.prompt_sample, client=gpt, stop=None)
     return ys, {}
 
 
@@ -395,7 +403,7 @@ class ToTMethods:
         gpt = self.gpts[solve_client]
         print(gpt)
         x = task.get_input(idx)  # input
-        ys = get_samples(self.args, task, x, "", self.args.n_generate_sample, self.args.prompt_sample, stop=None)
+        ys = get_samples(self.args, task, x, "", self.args.n_generate_sample, self.args.prompt_sample, stop=None, client=gpt)
         return ys, {}
 
     def solve(

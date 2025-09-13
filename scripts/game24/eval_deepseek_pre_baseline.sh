@@ -7,9 +7,10 @@ python merged_run.py \
     --method_evaluate value \
     --method_select greedy \
     --temperature 0.7 \
-    --solve_method tot \
+    --solve_method naive \
+    --prompt_sample cot \
     --n_evaluate_sample 1 \
-    --n_select_sample 10 \
+    --n_select_sample 1 \
     --warm_start \
     --check_format \
     ${@}

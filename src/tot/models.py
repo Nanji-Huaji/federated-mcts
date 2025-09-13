@@ -161,7 +161,7 @@ def gpt(
     prompt: str,
     model: str | None = "gpt-4",
     temperature: float = 0.9,
-    max_tokens: int = 1000,
+    max_tokens: int = 3072,
     n: int = 1,
     stop=None,
     api_base: str | None = openai.api_base,

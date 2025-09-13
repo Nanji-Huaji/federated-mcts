@@ -31,7 +31,7 @@ class Game24Task(Task):
         (1 + 2 + 3) * 4 = 24
     """
 
-    def __init__(self, file="24.csv"):
+    def __init__(self, file="24_extracted.csv"):
         """
         file: a csv file (fixed)
         """

@@ -58,6 +58,11 @@ def run(args, solve_function):
         print(f"Task {i}")
         task = get_task(args.task)
 
+        if args.task == "game24" and args.use_hardest_data:
+            from tot.tasks.game24 import Game24Task
+
+            task = Game24Task("24_hardest.csv")
+
         ys, info = solve_function(task, i)
 
         # log
@@ -180,6 +185,8 @@ def parse_args():
     args.add_argument("--last_lm", action="store_true", help="Use the large model for the last step")
 
     args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
+
+    args.add_argument("--use_hardest_data", action="store_true")
 
     args = args.parse_args()
     return args
