@@ -238,6 +238,10 @@ def token_probability_uncertainty(logits: torch.Tensor, current_token: int) -> f
     return 1.0 - current_token_prob
 
 
+# Type alias for backward compatibility
+DraftModel = UncertaintyInferenceFramework
+
+
 # 使用示例
 if __name__ == "__main__":
     # 初始化框架

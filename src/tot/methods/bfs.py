@@ -552,7 +552,7 @@ class ToTMethods:
             print(ys)
         return ys, {"steps": infos}
 
-    def uncertainty_solve(self, task, idx, to_print=True, draft_model: DraftModel, eval_client="remote_client", **kwargs):
+    def uncertainty_solve(self, task, idx, to_print=True, draft_model: DraftModel = None, eval_client="remote_client", **kwargs):
         pass
 
     
