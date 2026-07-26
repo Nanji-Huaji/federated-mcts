@@ -130,7 +130,7 @@ def run_exploration_phase() -> List[Dict[str, Any]]:
             "task": "game24",
             "task_start_index": 900,
             "task_end_index": 910,  # 小范围先测试
-            "model_config": "configs/model_config_deepseek.json",
+            "model_config": "model_config_deepseek.json",
             "method_generate": "propose",
             "method_evaluate": "value",
             "method_select": "greedy",
@@ -211,7 +211,7 @@ def run_full_evaluation(top_configs: List[Dict[str, Any]]) -> List[Dict[str, Any
         "task": "game24",
         "task_start_index": 900,
         "task_end_index": 930,
-        "model_config": "configs/model_config_deepseek.json",
+        "model_config": "model_config_deepseek.json",
         "method_generate": "propose",
         "method_evaluate": "value",
         "method_select": "greedy",
@@ -419,7 +419,7 @@ def save_results(exploration_results: List[Dict[str, Any]], evaluation_results: 
         f.write("Base Configuration:\n")
         f.write("{\n")
         f.write('  "task": "game24",\n')
-        f.write('  "model_config": "configs/model_config_deepseek.json",\n')
+        f.write('  "model_config": "model_config_deepseek.json",\n')
         f.write('  "method_generate": "propose",\n')
         f.write('  "method_evaluate": "value",\n')
         f.write('  "method_select": "greedy",\n')
