@@ -1,0 +1,14 @@
+[
+    {
+        "client_name": "local_client",
+        "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "api_key_environment_variable": "QWEN_API_KEY",
+        "model": "qwen2.5-32b-instruct"
+    },
+    {
+        "client_name": "remote_client",
+        "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "api_key_environment_variable": "QWEN_API_KEY",
+        "model": "deepseek-v3"
+    }
+]
