@@ -55,7 +55,7 @@ def run(args, solve_function):
         print(f"Task {i}")
         task = get_task(args.task)
 
-        ys, info = solve_function(task, i)
+        ys, info = solve_function(task, i, assign_strategy=args.assign_strategy)
 
         # log
         print("ys ", ys)
@@ -176,6 +176,9 @@ def parse_args():
     args.add_argument("--inference_idx", type=int, default=0, help="Do multiple experiments")
     args.add_argument("--last_lm", action="store_true", help="Use the large model for the last step")
 
+    args.add_argument("--assign_strategy", type=str, default="round_robin",
+                        choices=["round_robin", "difficulty", "bandit"],
+                        help="Task assignment strategy (default: round_robin)")
     args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
 
     args = args.parse_args()

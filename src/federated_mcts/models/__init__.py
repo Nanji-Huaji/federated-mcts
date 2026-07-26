@@ -12,5 +12,6 @@ from federated_mcts.models.local_inference import UncertaintyInferenceFramework,
 __all__ = [
     'gpt', 'chatgpt', 'completions_with_backoff', 'EarlyStopException', 'EARLY_STOP_FUNCTION',
     'get_usage_tracker', 'get_model_usage_summary', 'reset_usage_stats', 'print_usage_summary', 'gpt_usage', 'UsageTracker',
-    'UncertaintyInferenceFramework', 'DraftModel',
+    'UncertaintyInferenceFramework', 'DraftModel', 'VLLMClient', 'create_vllm_gpt_function',
 ]
+from federated_mcts.models.vllm_client import VLLMClient, create_vllm_gpt_function
