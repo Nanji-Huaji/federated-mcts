@@ -2,6 +2,10 @@ import os
 import json
 import argparse
 
+from federated_mcts.env_loader import load_dotenv
+load_dotenv()
+
+
 from federated_mcts.tasks import get_task
 
 from federated_mcts.models import get_model_usage_summary
@@ -30,7 +34,11 @@ def file_name_generater(args):
     if args.naive_run:
         file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
     else:
-        file = f"./logs/{args.task}/{args.solve_method}/{args.remotebackend}/{args.temperature}_{args.method_generate}_n_generate_sample_{args.n_generate_sample}_{args.method_evaluate}_n_evaluate_sample_{args.n_evaluate_sample}_method_select_{args.method_select}_n_select_sample_{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
+        policy_suffix = {
+            "diverse": "_policy_diverse",
+            "dqn": "_policy_dqn",
+        }.get(getattr(args, "search_policy", "baseline"), "")
+        file = f"./logs/{args.task}/{args.solve_method}/{args.remotebackend}/{args.temperature}_{args.method_generate}_n_generate_sample_{args.n_generate_sample}_{args.method_evaluate}_n_evaluate_sample_{args.n_evaluate_sample}_method_select_{args.method_select}_n_select_sample_{args.n_select_sample}{policy_suffix}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
     print(f"File name: {file}.json")
     return file
@@ -50,7 +58,14 @@ def run(args, solve_function):
 
     logs, cnt_avg, cnt_any = [], 0, 0
 
-    for i in range(args.task_start_index, args.task_end_index):
+    task_indices = range(args.task_start_index, args.task_end_index)
+    if getattr(args, "task_split", None):
+        import json
+        with open(f"data/splits/{args.task}.json") as f:
+            split = json.load(f)[args.task_split]
+        task_indices = list(split)
+        print("Using %s split: %d tasks, indices %d..%d" % (args.task_split, len(task_indices), task_indices[0], task_indices[-1]))
+    for i in task_indices:
         ys = [""]
         print(f"Task {i}")
         task = get_task(args.task)
@@ -67,6 +82,14 @@ def run(args, solve_function):
             else:
                 r = {"r": 0}  # Do not count twice
             infos.append(r)
+
+        # Re-attribute the terminal DQN reward with the exact task reward (the solver only sees the success-state heuristic).
+        if getattr(args, "search_policy", "baseline") == "dqn":
+            session = getattr(solver, "dqn_session", None)
+            if session is not None:
+                accs = [info["r"] for info in infos]
+                session.finalize(any(accs))
+
         token_consumption = get_model_usage_summary()
         time_consumption = solver.latency_dict
         info.update(
@@ -90,7 +113,7 @@ def run(args, solve_function):
         cnt_any += any(accs)
         print(i, "sum(accs)", sum(accs), "cnt_avg", cnt_avg, "cnt_any", cnt_any, "\n")
 
-    n = args.task_end_index - args.task_start_index
+    n = len(task_indices)
     print("The average sum is ", cnt_avg / n, ". The accuracy is: ", cnt_any / n)
     print("Token consumption: ", token_consumption)
     res_json = {
@@ -141,7 +164,9 @@ def parse_args():
         default="qwen2.5-32b-instruct",
     )
     args.add_argument("--temperature", type=float, default=0.9)
-    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords", "gsm8k"])
+    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords", "gsm8k", "wikilogic", "hyblogic", "blocksworld"])
+    args.add_argument("--task_split", type=str, default=None, choices=["train", "val", "test"],
+                        help="use predefined split from data/splits/{task}.json (overrides --task_start/--task_end)")
     args.add_argument("--task_start_index", type=int, default=900)
     args.add_argument("--task_end_index", type=int, default=1000)
     args.add_argument("--naive_run", action="store_true")
@@ -154,6 +179,26 @@ def parse_args():
     args.add_argument("--n_generate_sample", type=int, default=1)  # only thing needed if naive_run
     args.add_argument("--n_evaluate_sample", type=int, default=1)
     args.add_argument("--n_select_sample", type=int, default=1)
+    args.add_argument("--search_policy", choices=["baseline", "diverse", "dqn"], default="baseline")
+    args.add_argument("--diverse_joint_rank", action=argparse.BooleanOptionalAction, default=True)
+    args.add_argument("--diversity_weight", type=float, default=0.35)
+    args.add_argument("--beam_expand", type=int, default=2)
+    args.add_argument("--beam_uncertainty_margin", type=float, default=0.1)
+    args.add_argument("--beam_confidence_margin", type=float, default=0.8)
+    args.add_argument("--dqn_seed", type=int, default=0, help="seed for the DQN controller")
+    args.add_argument("--dqn_epsilon", type=float, default=1.0, help="exploration rate; clamped to >= 0.5 while collecting")
+    args.add_argument("--dqn_state_dim", type=int, default=12)
+    args.add_argument("--dqn_capacity", type=int, default=10000)
+    args.add_argument("--dqn_token_budget", type=float, default=5000.0)
+    args.add_argument("--dqn_latency_budget", type=float, default=60.0)
+    args.add_argument(
+        "--dqn_checkpoint", type=str, default=None,
+        help="path to a trained DQN checkpoint; missing file starts collection-only mode",
+    )
+    args.add_argument(
+        "--dqn_jsonl", type=str, default=None,
+        help="path to append collected DQN transitions as JSONL",
+    )
     args.add_argument(
         "--solve_method", type=str, choices=["naive", "tot", "speculative_solve", "federated_solve"], default="tot"
     )
