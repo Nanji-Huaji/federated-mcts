@@ -9,6 +9,7 @@ load_dotenv()
 from federated_mcts.tasks import get_task
 
 from federated_mcts.models import get_model_usage_summary
+from federated_mcts.utils.cost_limit import cost_exceeded, total_cost_usd
 
 import openai
 
@@ -59,6 +60,8 @@ def run(args, solve_function):
     solve_function = function_map[solve_function]
 
     logs, cnt_avg, cnt_any = [], 0, 0
+    stop_reason = None
+    token_consumption = {}
     oracle_task_metrics = []
 
     task_indices = range(args.task_start_index, args.task_end_index)
@@ -69,6 +72,9 @@ def run(args, solve_function):
         task_indices = list(split)
         print("Using %s split: %d tasks, indices %d..%d" % (args.task_split, len(task_indices), task_indices[0], task_indices[-1]))
     for i in task_indices:
+        if cost_exceeded(get_model_usage_summary(), args.max_cost_usd):
+            stop_reason = "max_cost_usd"
+            break
         ys = [""]
         print(f"Task {i}")
         task = get_task(args.task)
@@ -120,17 +126,25 @@ def run(args, solve_function):
         cnt_avg += sum(accs)  # / len(accs) #jinyu: counting the sum
         cnt_any += any(accs)
         print(i, "sum(accs)", sum(accs), "cnt_avg", cnt_avg, "cnt_any", cnt_any, "\n")
+        if cost_exceeded(token_consumption, args.max_cost_usd):
+            stop_reason = "max_cost_usd"
+            break
 
-    n = len(task_indices)
-    print("The average sum is ", cnt_avg / n, ". The accuracy is: ", cnt_any / n)
+    n = len(logs)
+    avg_sum = cnt_avg / n if n else 0.0
+    accuracy = cnt_any / n if n else 0.0
+    print("The average sum is ", avg_sum, ". The accuracy is: ", accuracy)
     print("Token consumption: ", token_consumption)
     res_json = {
-        "avg_sum": cnt_avg / n,
-        "acc": cnt_any / n,
+        "avg_sum": avg_sum,
+        "acc": accuracy,
         "sm": args.localbackend,
         "llm": args.remotebackend,
     }
     res_json.update(token_consumption)
+    res_json["estimated_cost_usd"] = total_cost_usd(token_consumption)
+    if stop_reason is not None:
+        res_json["stop_reason"] = stop_reason
     merge_oracle_metrics(oracle_task_metrics, res_json)
 
     with open(file_name + "_performance.json", "w") as f:
@@ -200,6 +214,8 @@ def parse_args():
     args.add_argument("--dqn_capacity", type=int, default=10000)
     args.add_argument("--dqn_token_budget", type=float, default=5000.0)
     args.add_argument("--dqn_latency_budget", type=float, default=60.0)
+    args.add_argument("--dqn_oracle_distance_reward", action=argparse.BooleanOptionalAction, default=False)
+    args.add_argument("--dqn_oracle_distance_scale", type=float, default=0.25)
     args.add_argument(
         "--dqn_checkpoint", type=str, default=None,
         help="path to a trained DQN checkpoint; missing file starts collection-only mode",
@@ -234,6 +250,7 @@ def parse_args():
                         choices=["round_robin", "difficulty", "bandit"],
                         help="Task assignment strategy (default: round_robin)")
     args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
+    args.add_argument("--max_cost_usd", type=float, default=None, help="stop after reaching this estimated API cost")
 
     args = args.parse_args()
     return args

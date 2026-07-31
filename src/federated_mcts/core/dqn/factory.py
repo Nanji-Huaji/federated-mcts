@@ -21,4 +21,6 @@ def build_dqn_session(args, *, jsonl_path: str | None = None) -> DqnSearchSessio
         token_budget=getattr(args, "dqn_token_budget", 5000.0),
         latency_budget=getattr(args, "dqn_latency_budget", 60.0),
         jsonl_path=jsonl_path if jsonl_path is not None else getattr(args, "dqn_jsonl", None),
+        oracle_distance_reward_enabled=getattr(args, "dqn_oracle_distance_reward", False),
+        oracle_distance_scale=getattr(args, "dqn_oracle_distance_scale", 0.25),
     )

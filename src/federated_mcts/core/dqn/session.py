@@ -15,11 +15,9 @@ from __future__ import annotations
 
 import time
 
-from federated_mcts.core.dqn.actions import beam_and_joint_rank
-from federated_mcts.core.dqn.controller import _plain
-from federated_mcts.core.dqn.recorder import JSONLTransitionRecorder
-from federated_mcts.core.dqn.rewards import correctness_reward, latency_penalty, token_penalty
+from federated_mcts.core.dqn.episode import DqnEpisode
 from federated_mcts.core.dqn.step import DqnStepOutcome
+from federated_mcts.core.dqn.transition_rewards import build_reward_components
 from federated_mcts.core.joint_ranking import evaluate_ranked_candidates
 from federated_mcts.core.search_policy import deduplicate_candidates, successful_candidate
 
@@ -34,97 +32,38 @@ class DqnSearchSession:
         max_tokens: int = 1000,
         budget_seconds: float = 10.0,
         jsonl_path: str | None = None,
+        oracle_distance_reward_enabled: bool = False,
+        oracle_distance_scale: float = 0.25,
     ):
         self.controller = controller
         self.token_budget = float(token_budget)
         self.latency_budget = float(latency_budget)
         self.max_tokens = max_tokens
         self.budget_seconds = budget_seconds
-        self.recorder = JSONLTransitionRecorder(jsonl_path) if jsonl_path else None
+        self._episode = DqnEpisode(
+            max_tokens=max_tokens, budget_seconds=budget_seconds,
+            distance_scale=oracle_distance_scale, jsonl_path=jsonl_path,
+        )
+        self.oracle_distance_reward_enabled = oracle_distance_reward_enabled
+        self.oracle_distance_scale = oracle_distance_scale
+        self._oracle_distance: int | None = None
         self._value_cache: dict = {}
         self.last_values = None
         self.last_joint_rank: bool | None = None
         self._cumulative_tokens = 0.0
         self._cumulative_latency = 0.0
-        self._pending: dict | None = None
-        self._all_transitions: list[dict] = []
-        self._pending_transitions: list[dict] = []
-        self._last_terminal_costs = (0.0, 0.0)
-
-    # -- episode lifecycle -------------------------------------------------
-
-    def _open_pending(self, state, action: int) -> None:
-        beam, joint_rank = beam_and_joint_rank(action)
-        self._pending = {
-            "state": _plain(state),
-            "action": int(action),
-            "beam": int(beam),
-            "joint_rank": bool(joint_rank),
-            "tokens": 0.0,
-            "latency": 0.0,
-        }
-
-    def _close_pending(self, *, next_state, done: bool, success: bool) -> dict | None:
-        if self._pending is None:
-            return None
-        pending = self._pending
-        self._pending = None
-        base = correctness_reward(success) if done else 0.0
-        reward = (
-            base
-            - token_penalty(pending["tokens"], self.max_tokens)
-            - latency_penalty(pending["latency"], self.budget_seconds)
-        )
-        transition = {
-            "state": pending["state"],
-            "action": pending["action"],
-            "reward": float(reward),
-            "next_state": None if next_state is None else _plain(next_state),
-            "done": bool(done),
-            "beam": pending["beam"],
-            "joint_rank": pending["joint_rank"],
-        }
-        self._all_transitions.append(transition)
-        self._pending_transitions.append(transition)
-        if done:
-            self._last_terminal_costs = (pending["tokens"], pending["latency"])
-        if self.recorder is not None:
-            self.recorder.record(transition)
-        return transition
-
-    def _add_costs(self, *, tokens: float, latency: float) -> None:
-        if self._pending is None:
-            return
-        self._pending["tokens"] += float(tokens)
-        self._pending["latency"] += float(latency)
-
     def drain_transitions(self) -> list[dict]:
-        drained = self._pending_transitions
-        self._pending_transitions = []
-        return drained
+        return self._episode.drain()
 
     def finish_episode(self, success: bool = False) -> None:
         """Close any dangling pending transition as the terminal one."""
-        if self._pending is not None:
-            self._close_pending(next_state=None, done=True, success=bool(success))
+        self._episode.finish(bool(success))
 
     def finalize(self, terminal_success: bool) -> None:
         """Re-attribute the exact task reward to the final transition,
         replacing the provisional success-state heuristic used at solve time
         (the runner only knows the exact reward after task.test_output_modify)."""
-        if not self._all_transitions:
-            return
-        final = self._all_transitions[-1]
-        if not final["done"]:
-            return
-        tokens, latency = self._last_terminal_costs
-        final["reward"] = float(
-            correctness_reward(bool(terminal_success))
-            - token_penalty(tokens, self.max_tokens)
-            - latency_penalty(latency, self.budget_seconds)
-        )
-        if self.recorder is not None:
-            self.recorder.replace_last(final)
+        self._episode.finalize(bool(terminal_success))
 
     # -- per-step processing ------------------------------------------------
 
@@ -143,6 +82,15 @@ class DqnSearchSession:
         step_latency: float = 0.0,
     ) -> DqnStepOutcome:
         unique, states = deduplicate_candidates(task, x, candidates)
+        from federated_mcts.core.dqn.oracle_session import (
+            initial_distance,
+            oracle_distance_enabled,
+            selected_distance,
+        )
+
+        oracle_enabled = oracle_distance_enabled(task, self.oracle_distance_reward_enabled)
+        if oracle_enabled and self._oracle_distance is None:
+            self._oracle_distance = initial_distance(x)
         success = successful_candidate(task, x, unique)
 
         decision_state = None
@@ -159,8 +107,8 @@ class DqnSearchSession:
                 latency_budget=self.latency_budget,
                 previous_joint_rank=self.last_joint_rank,
             )
-            self._close_pending(next_state=decision_state.state, done=False, success=False)
-            self._open_pending(decision_state.state, decision_state.action)
+            self._episode.close(next_state=decision_state.state, done=False, success=False)
+            self._episode.open(decision_state.state, decision_state.action, self._oracle_distance if oracle_enabled else None)
             joint_rank = decision_state.joint_rank
             self.last_joint_rank = joint_rank
         else:
@@ -191,12 +139,15 @@ class DqnSearchSession:
             select_new_ys = [unique[index] for index in selected_ids]
             stopped = False
 
-        self._add_costs(tokens=step_tokens, latency=step_latency + eval_seconds)
+        self._episode.add_costs(tokens=step_tokens, latency=step_latency + eval_seconds)
         self._cumulative_tokens += step_tokens
         self._cumulative_latency += step_latency + eval_seconds
 
+        if oracle_enabled and self._episode.pending is not None:
+            self._episode.pending["distance_after"] = selected_distance(x, select_new_ys, stopped)
+            self._oracle_distance = self._episode.pending["distance_after"]
         if stopped:
-            self._close_pending(next_state=None, done=True, success=True)
+            self._episode.close(next_state=None, done=True, success=True)
         self.last_values = values
 
         action = None if decision_state is None else decision_state.action

@@ -80,6 +80,8 @@ class UsageTracker:
             "gpt-3.5-turbo": {"prompt": 0.75, "completion": 1.5},
             "meta-llama-3.1-8b-instruct@q4_k_m": {"prompt": 0.0, "completion": 0.0},
             "phi-3-medium-4k-instruct": {"prompt": 0.0, "completion": 0.0},
+            "deepseek-v4-flash": {"prompt": 0.14, "completion": 0.28},
+            "deepseek-v4-pro": {"prompt": 0.435, "completion": 0.87},
         }
         price = model_prices.get(model, {"prompt": 1.0, "completion": 2.0})
         return completion_tokens * price["completion"] / 1_000_000 + prompt_tokens * price["prompt"] / 1_000_000
