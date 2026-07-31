@@ -9,9 +9,9 @@
   },
   {
     "client_name": "remote_client",
-    "model": "deepseek-v4-flash",
-    "api_base": "https://api.deepseek.com/v1",
-    "api_key_environment_variable": "DEEPSEEK_API_KEY",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "type": "vllm",
+    "api_base": "http://localhost:8000/v1",
     "temperature": 0.7,
     "max_tokens": 512
   }

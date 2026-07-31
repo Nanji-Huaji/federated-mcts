@@ -1,0 +1,19 @@
+[
+    {
+        "client_name": "local_client",
+        "model": "Chunity/Qwen3.6-35B-A3B-AutoRound-AWQ-4bit",
+        "type": "vllm",
+        "api_base": "http://localhost:8000/v1",
+        "temperature": 0.3,
+        "max_tokens": 128
+    },
+    {
+        "client_name": "remote_client",
+        "model": "deepseek-chat",
+        "type": "openai",
+        "api_base": "https://api.deepseek.com/v1",
+        "api_key_environment_variable": "DEEPSEEK_API_KEY",
+        "temperature": 0.7,
+        "max_tokens": 256
+    }
+]
