@@ -18,6 +18,8 @@ import os
 src_path = os.path.join(os.path.dirname(__file__), "src")
 sys.path.insert(0, src_path)
 
+from federated_mcts.evaluation.blocksworld_metrics import merge_oracle_metrics, task_oracle_metrics
+
 
 def file_name_generater(args):
     if hasattr(args, "model_config"):
@@ -52,6 +54,7 @@ def run(args, solve_function):
     solve_function = function_map[solve_function]
 
     logs, cnt_avg, cnt_any = [], 0, 0
+    oracle_task_metrics = []
 
     task_indices = range(args.task_start_index, args.task_end_index)
     if getattr(args, "task_split", None):
@@ -78,6 +81,11 @@ def run(args, solve_function):
             else:
                 r = {"r": 0}  # Do not count twice
             infos.append(r)
+        oracle = task_oracle_metrics(task, i, ys)
+        if oracle is not None:
+            info["blocksworld_oracle"] = oracle
+            oracle_task_metrics.append(oracle)
+
         token_consumption = get_model_usage_summary()
         time_consumption = totmethod.latency_dict
         info.update(
@@ -111,6 +119,7 @@ def run(args, solve_function):
         "llm": args.remotebackend,
     }
     res_json.update(token_consumption)
+    merge_oracle_metrics(oracle_task_metrics, res_json)
 
     with open(file_name + "_performance.json", "w") as f:
         json.dump(res_json, f, indent=4)
