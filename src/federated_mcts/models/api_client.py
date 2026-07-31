@@ -80,8 +80,9 @@ def chatgpt(
     usage_tracker = get_usage_tracker()
     outputs = []
 
+    max_choices = 1 if model.startswith("deepseek-v4-") else 20
     while n > 0:
-        cnt = min(n, 20)
+        cnt = min(n, max_choices)
         n -= cnt
         res = _create_completion(
             client=client,
