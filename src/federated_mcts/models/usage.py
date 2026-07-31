@@ -1,5 +1,6 @@
 """Token usage and cost tracking for model API calls."""
 
+import threading
 from collections import defaultdict
 from typing import Dict
 
@@ -8,43 +9,50 @@ class UsageTracker:
     """Thread-safe singleton tracking token usage and cost per model."""
 
     def __init__(self):
+        self._lock = threading.Lock()
         self._model_usage: Dict[str, Dict[str, int]] = defaultdict(
             lambda: {"completion_tokens": 0, "prompt_tokens": 0, "total_calls": 0}
         )
 
     def record(self, model: str, completion_tokens: int, prompt_tokens: int):
-        self._model_usage[model]["completion_tokens"] += completion_tokens
-        self._model_usage[model]["prompt_tokens"] += prompt_tokens
-        self._model_usage[model]["total_calls"] += 1
+        with self._lock:
+            self._model_usage[model]["completion_tokens"] += completion_tokens
+            self._model_usage[model]["prompt_tokens"] += prompt_tokens
+            self._model_usage[model]["total_calls"] += 1
 
     def get_summary(self) -> Dict:
-        summary = {}
-        for model, usage in self._model_usage.items():
-            total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
-            cost = self._calculate_cost(model, usage["completion_tokens"], usage["prompt_tokens"])
-            summary[model] = {
-                "completion_tokens": usage["completion_tokens"],
-                "prompt_tokens": usage["prompt_tokens"],
-                "total_tokens": total_tokens,
-                "total_calls": usage["total_calls"],
-                "cost": cost,
-            }
-        return summary
+        with self._lock:
+            summary = {}
+            for model, usage in self._model_usage.items():
+                total_tokens = usage["completion_tokens"] + usage["prompt_tokens"]
+                cost = self._calculate_cost(model, usage["completion_tokens"], usage["prompt_tokens"])
+                summary[model] = {
+                    "completion_tokens": usage["completion_tokens"],
+                    "prompt_tokens": usage["prompt_tokens"],
+                    "total_tokens": total_tokens,
+                    "total_calls": usage["total_calls"],
+                    "cost": cost,
+                }
+            return summary
 
     def get_total_tokens(self) -> int:
-        return sum(u["completion_tokens"] + u["prompt_tokens"] for u in self._model_usage.values())
+        with self._lock:
+            return sum(u["completion_tokens"] + u["prompt_tokens"] for u in self._model_usage.values())
 
     def get_total_cost(self) -> float:
-        return sum(
-            self._calculate_cost(m, u["completion_tokens"], u["prompt_tokens"])
-            for m, u in self._model_usage.items()
-        )
+        with self._lock:
+            return sum(
+                self._calculate_cost(m, u["completion_tokens"], u["prompt_tokens"])
+                for m, u in self._model_usage.items()
+            )
 
     def get_model_list(self):
-        return list(self._model_usage.keys())
+        with self._lock:
+            return list(self._model_usage.keys())
 
     def reset(self):
-        self._model_usage.clear()
+        with self._lock:
+            self._model_usage.clear()
 
     def print_summary(self):
         print()
