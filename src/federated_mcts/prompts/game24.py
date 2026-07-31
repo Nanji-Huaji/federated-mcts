@@ -163,6 +163,64 @@ impossible
 {input}
 """
 
+value_prompt = """Evaluate if given numbers can reach 24 (sure/likely/impossible).
+Do not restate the question. Output only one word: sure, likely, or impossible.
+
+10 14
+10 + 14 = 24\n
+sure
+
+11 12
+11 + 12 = 23
+12 - 11 = 1
+11 * 12 = 132\n
+impossible
+
+4 4 10
+4 + 4 + 10 = 18
+4 * 10 - 4 = 36
+(10 - 4) * 4 = 24\n
+sure
+
+5 6 6
+5 + 6 + 6 = 17
+(6 - 5) * 6 = 6\n
+likely
+
+1 3 3
+1 * 3 * 3 = 9
+(1 + 3) * 3 = 12\n
+impossible
+
+{input}
+"""
+
+value_prompt_backup1 = """Evaluate if given numbers can reach 24 with an output of (left: 24) (sure/likely/impossible).
+Follow these guidelines:
+Please do not restate the question.
+Do not derive in any way other than the following example.
+Examples:
+1 + 1 = 2 (left: 1 2 8)\n1 + 2 = 3 (left: 3 8)\n 3 * 8 = 24 (left: 24)\n
+sure
+6 + 6 = 12 (left: 6 6 12)\n
+likely
+5 * 6 = 30 (left: 4, 10, 30)\n30 - 10 = 20 (left: 20, 4)\n20 + 4 = 24 (left: 24)\n
+sure
+6 * 6 = 36 (left: 6 6 36)\n6 + 6 = 12 (left: 12, 36)\n36 - 12 = 24 (left: 24)\n
+sure
+1 * 1 = 1 (left: 1, 2, 12)\n2 * 12 = 24 (left: 1 24)\n24 / 1 = 24 (left: 24)\n
+sure
+2 + 3 = 5 (left: 1 4 5)\n1 + 5 = 6 (left: 4 6)\n
+likely
+8 / 1 = 8 (left: 1 2 8)\n8 / 1 = 8 (left: 2 8)\n8 - 2 = 6 (left: 6)\n
+impossible
+8 - 1 = 7 (left: 1 2 7)\n7 - 1 = 6 (left: 2 6)\n
+impossible
+5 + 6 = 11 (left: 4 10 11)\n11 - 4 = 7 (left: 6 7 10)\n7 / 6 = 1.1667 (rounded to four decimal places, left: 10 1.1667)\n
+impossible
+{input}
+"""
+
 value_prompt = """Evaluate if given numbers can reach 24 (sure/likely/impossible). Please do not restate the question, do not derive in any way other than the following example.
 10 14
 10 + 14 = 24\n

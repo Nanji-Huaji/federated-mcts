@@ -1,5 +1,6 @@
 import re
 import os
+from fractions import Fraction
 import sympy
 import pandas as pd
 from federated_mcts.tasks.base import Task, DATA_PATH
@@ -100,7 +101,7 @@ class Game24Task(Task):
             numbers = current_numbers.split(" ")
             if len(numbers) == 2:
                 prompt = propose_prompt_backup_s2.format(input=current_numbers)
-            if len(numbers) == 3:
+            elif len(numbers) == 3:
                 prompt = propose_prompt_backup_s1.format(input=current_numbers)
             else:
                 prompt = propose_prompt_backup_s0.format(input=current_numbers)
@@ -131,9 +132,42 @@ class Game24Task(Task):
         # if len(y.strip().split("\n")) == 4 and "answer" not in y.lower():
         #     return 0
         value_names = [_.split("\n")[-1] for _ in value_outputs]
-        value_map = {"impossible": 0.001, "likely": 1, "sure": 20}  # TODO: ad hoc
+        value_map = {"impossible": 0, "likely": 1, "sure": 2}  # TODO: ad hoc
         value = sum(value * value_names.count(name) for name, value in value_map.items())
         return value
+
+    @staticmethod
+    def canonical_state_key(x: str, y: str):
+        numbers = get_current_numbers(y if y.strip() else x).split()
+        return tuple(sorted(Fraction(number) for number in numbers))
+
+    @staticmethod
+    def is_success_state(x: str, y: str) -> bool:
+        lines = [line for line in y.split("\n") if line.strip()]
+        if not lines:
+            return False
+        for index, line in enumerate(lines):
+            if index == 0:
+                correct, _ = check_final_result(line, x=x)
+            else:
+                correct, _ = check_final_result(line, lines[index - 1])
+            if not correct:
+                return False
+        return Game24Task.canonical_state_key(x, y) == (Fraction(24),)
+
+    @staticmethod
+    def joint_rank_prompt_wrap(x: str, candidates: list[str]) -> str:
+        rows = []
+        for index, candidate in enumerate(candidates):
+            last_line = candidate.strip().split("\n")[-1]
+            rows.append(f"{index}: {last_line}")
+        joined = "\n".join(rows)
+        return (
+            "Rank every candidate state by how promising it is for reaching exactly 24. "
+            "Return JSON only as {\"ranking\":[{\"id\":0,\"score\":0.0}]}. "
+            "Include every ID exactly once and use scores from 0 to 1.\n"
+            f"Input: {x}\nCandidates:\n{joined}"
+        )
 
     @staticmethod
     def pre_generate_check(y):  # Whether it needs to generate

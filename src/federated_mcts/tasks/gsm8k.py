@@ -55,11 +55,13 @@ class GSM8KTask(Task):
         self.value_cache = {}
         self.steps = 6  # GSM8K问题通常需要更多步骤
         self.stops = ["\n"] * 6
+        self._current_idx = 0
 
     def __len__(self) -> int:
         return len(self.data)
 
     def get_input(self, idx: int) -> str:
+        self._current_idx = idx
         return self.data[idx]["question"]
 
     def test_output(self, idx: int, output: str):
@@ -114,6 +116,45 @@ class GSM8KTask(Task):
         else:
             current_progress = get_current_progress(y)
             return value_prompt.format(input=x, current_progress=current_progress)
+
+    def canonical_state_key(self, x: str, y: str):
+        numbers = re.findall(r"=\s*(-?\d+\.?\d*)", y)
+        return tuple(sorted(float(n) for n in numbers))
+
+    def is_success_state(self, x: str, y: str) -> bool:
+        if "####" not in y:
+            return False
+        pred = extract_answer(y).replace(",", "")
+        true = extract_answer(self.data[self._current_idx]["answer"]).replace(",", "")
+        try:
+            return abs(float(pred) - float(true)) < 0.01
+        except (ValueError, TypeError):
+            return False
+
+    @staticmethod
+    def joint_rank_prompt_wrap(x: str, candidates: list[str]) -> str:
+        rows = []
+        for index, candidate in enumerate(candidates):
+            last_line = candidate.strip().split("\n")[-1]
+            rows.append(f"{index}: {last_line}")
+        joined = "\n".join(rows)
+        return (
+            "Rank every candidate reasoning step by how likely it is to help reach the correct numeric answer. "
+            'Return JSON only as {"ranking":[{"id":0,"score":0.0}]}. '
+            "Include every ID exactly once and use scores from 0 to 1.\n"
+            f"Problem: {x}\nCandidates:\n{joined}"
+        )
+
+    @staticmethod
+    def pre_generate_check(y):
+        return "####" not in y
+
+    @staticmethod
+    def process_generate_result(pro, x, y, check_format):
+        stripped = pro.strip()
+        if not stripped:
+            return False, y
+        return True, y + stripped + "\n"
 
     @staticmethod
     def value_outputs_unwrap(x: str, y: str, value_outputs: list) -> float:
