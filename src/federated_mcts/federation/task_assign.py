@@ -89,9 +89,15 @@ class RoundRobinStrategy(BaseAssignStrategy):
                 ys=[],
             ))
 
-        for i, y in enumerate(ys):
-            client_idx = i % len(model_list)
-            assignments[client_idx]["ys"].append(y)
+        if len(ys) == 1 and ys[0] == "":
+            # Sole root candidate: replicate to every model so each
+            # independently explores from the root.
+            for a in assignments:
+                a["ys"] = [ys[0]]
+        else:
+            for i, y in enumerate(ys):
+                client_idx = i % len(model_list)
+                assignments[client_idx]["ys"].append(y)
 
         return assignments
 
@@ -129,8 +135,22 @@ class DifficultyBasedStrategy(BaseAssignStrategy):
         ys: List[str],
         context: AssignmentContext,
     ) -> List[TaskAssignment]:
-        if not model_list or not ys:
+        if not model_list:
             return []
+        if not ys:
+            return []
+
+        if len(ys) == 1 and ys[0] == "":
+            remote_model = model_list[1] if len(model_list) >= 2 else model_list[0]
+            eval_client = model_list[0] if self.local_is_eval else remote_model
+            assignments = []
+            for client_name in model_list:
+                assignments.append(TaskAssignment(
+                    solve_client=client_name,
+                    eval_client=eval_client,
+                    ys=[ys[0]],
+                ))
+            return assignments
 
         step = context.get("step", 0)
         total = context.get("total_steps", self.total_steps)
@@ -187,8 +207,8 @@ class ContextualBanditStrategy(BaseAssignStrategy):
         self,
         total_steps: int = 3,
         exploration_weight: float = 2.0,
-        min_samples: int = 3,
-        decay_factor: float = 0.0,
+        min_samples: int = 5,
+        decay_factor: float = 0.1,
     ):
         self.total_steps = total_steps
         self.C = exploration_weight
@@ -215,8 +235,21 @@ class ContextualBanditStrategy(BaseAssignStrategy):
         ys: List[str],
         context: AssignmentContext,
     ) -> List[TaskAssignment]:
-        if not model_list or not ys:
+        if not model_list:
             return []
+        if not ys:
+            return []
+
+        if len(ys) == 1 and ys[0] == "":
+            remote_model = model_list[1] if len(model_list) >= 2 else model_list[0]
+            assignments = []
+            for client_name in model_list:
+                assignments.append(TaskAssignment(
+                    solve_client=client_name,
+                    eval_client=remote_model,
+                    ys=[ys[0]],
+                ))
+            return assignments
 
         step = context.get("step", 0)
 
@@ -246,11 +279,14 @@ class ContextualBanditStrategy(BaseAssignStrategy):
         assignments: List[TaskAssignment] = []
         offset = 0
 
+        # Ensure minimum allocation per model to prevent lockout
+        min_per_model = max(1, n_total // len(model_list))
         for i, model in enumerate(model_list):
             if i == len(model_list) - 1:
-                n_model = n_total - offset  # last model gets remainder
+                n_model = n_total - offset
             else:
-                n_model = max(1, round(n_total * props[model])) if props[model] > 0.05 else 0
+                n_model = max(min_per_model, round(n_total * props[model]))
+                n_model = min(n_model, n_total - offset - min_per_model * (len(model_list) - 1 - i))
             n_model = min(n_model, n_total - offset)
 
             if n_model > 0:

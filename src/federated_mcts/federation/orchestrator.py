@@ -1,27 +1,34 @@
 """Federated MCTS orchestrator — manages multi-model reasoning across clients."""
 
-import itertools
 import json
 import os
 import time
 from functools import partial
 from math import ceil
 from typing import Dict, List, Tuple, Callable, Optional
+from federated_mcts.utils.exhaustive import assert_never
 
 import numpy as np
 
 from federated_mcts.models.api_client import gpt
 from federated_mcts.models import DraftModel, get_model_usage_summary
-from federated_mcts.core.generation import get_proposals, get_samples
-from federated_mcts.core.evaluation import get_values, get_votes
+from federated_mcts.core.diverse_search import DiverseSearch
+from federated_mcts.core.dqn.factory import build_dqn_session
+from federated_mcts.core.search_policy import state_key
+from federated_mcts.federation.federated_execution import FederatedExecutionMixin
+from federated_mcts.federation.standard_solvers import StandardSolversMixin
 from federated_mcts.federation.task_assign import (
     TaskAssignment,
 )
 from federated_mcts.federation.time_tracker import TimeTracker
-from federated_mcts.utils.uncertainty import Uncertainty
 
 
-class FederatedSolver:
+class NoClientsConfiguredError(RuntimeError):
+    def __str__(self) -> str:
+        return "No clients available for federated solving"
+
+
+class FederatedSolver(StandardSolversMixin, FederatedExecutionMixin):
     """Orchestrates MCTS reasoning across multiple model clients.
 
     Replaces the old ToTMethods class. Supports:
@@ -69,6 +76,7 @@ class FederatedSolver:
 
         client_names = [m["client_name"] for m in self.model_config]
         self.time_tracker = TimeTracker(client_names)
+        self._strategy_cache = {}
 
     @property
     def latency_dict(self) -> Dict[str, float]:
@@ -77,154 +85,45 @@ class FederatedSolver:
     def early_stop(self, task):
         pass
 
-    # ── Non-federated solvers ──────────────────────────────────────────
-
-    def naive_solve(self, task, idx, to_print=True, solve_client="remote_client", **kwargs):
-        gpt_fn = self.gpts[solve_client]
-        x = task.get_input(idx)
-        ys = get_samples(
-            self.args, task, x, "", self.args.n_generate_sample,
-            self.args.prompt_sample, stop=None
-        )
-        return ys, {}
-
-    def solve(self, task, idx, to_print=True, solve_client="remote_client", **kwargs):
-        gpt_fn = self.gpts[solve_client]
-        x = task.get_input(idx)
-        ys = [""]
-        infos = []
-        for step in range(task.steps):
-            if self.args.method_generate == "sample":
-                new_ys = [
-                    get_samples(self.args, task, x, y, self.args.n_generate_sample,
-                                prompt_sample=self.args.prompt_sample, stop=task.stops[step],
-                                client=gpt_fn)
-                    for y in ys
-                ]
-            elif self.args.method_generate == "propose":
-                new_ys = [get_proposals(self.args, step, task, x, y, client=gpt_fn) for y in ys]
-            new_ys = list(itertools.chain(*new_ys))
-            ids = list(range(len(new_ys)))
-
-            if self.args.method_evaluate == "vote":
-                values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=gpt_fn)
-            elif self.args.method_evaluate == "value":
-                values = get_values(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=gpt_fn)
-
-            if self.args.method_select == "sample":
-                ps = np.array(values) / sum(values)
-                select_ids = np.random.choice(ids, size=self.args.n_select_sample, p=ps).tolist()
-            elif self.args.method_select == "greedy":
-                select_ids = sorted(ids, key=lambda x: values[x], reverse=True)[:self.args.n_select_sample]
-            select_new_ys = [new_ys[select_id] for select_id in select_ids]
-
-            if to_print:
-                sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
-                print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
-
-            infos.append({"step": step, "x": x, "ys": ys, "new_ys": new_ys, "values": values, "select_new_ys": select_new_ys})
-            ys = select_new_ys
-
-        if to_print:
-            print(ys)
-        return ys, {"steps": infos}
-
-    # ── Speculative federated solver ───────────────────────────────────
-
-    def speculative_solve(self, task, idx, to_print=True, solve_client=None, eval_client=None, **kwargs):
-        local_client = self.gpts["local_client"] if solve_client is None else self.gpts[solve_client]
-        remote_client = self.gpts["remote_client"] if eval_client is None else self.gpts[eval_client]
-        print(f"local_client: {local_client}, remote_client: {remote_client}")
-
-        x = task.get_input(idx)
-        ys = [""]
-        infos = []
-
-        for step in range(task.steps):
-            solve_gpt = local_client
-            eval_gpt = remote_client
-
-            if self.args.warm_start and step == 0:
-                solve_gpt = remote_client
-                eval_gpt = remote_client
-            elif step + 1 == task.steps and self.args.last_lm:
-                solve_gpt = remote_client
-                eval_gpt = remote_client
-
-            eval_gpt = remote_client
-            if self.args.slm_eval:
-                eval_gpt = local_client
-            print(f"Step {step} of {task.steps} in Task {idx}, solve_client: {solve_gpt}, eval_client: {eval_gpt}")
-
-            start_time = time.time()
-            if self.args.method_generate == "sample":
-                new_ys = [
-                    get_samples(self.args, task, x, y, self.args.n_generate_sample,
-                                prompt_sample=self.args.prompt_sample, stop=task.stops[step],
-                                client=solve_gpt)
-                    for y in ys
-                ]
-            elif self.args.method_generate == "propose":
-                new_ys = [get_proposals(self.args, step, task, x, y, client=solve_gpt) for y in ys]
-            else:
-                raise Exception("Not match!")
-            new_ys = list(itertools.chain(*new_ys))
-            ids = list(range(len(new_ys)))
-            self.time_tracker.record_generation("speculative", time.time() - start_time)
-
-            start_time = time.time()
-            if self.args.method_evaluate == "vote":
-                values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
-            elif self.args.method_evaluate == "value":
-                values = get_values(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
-            else:
-                raise Exception("Not match!")
-            self.time_tracker.record_evaluation("speculative", time.time() - start_time)
-
-            if self.args.method_select == "sample" and sum(values) > 0:
-                ps = np.array(values) / sum(values)
-                select_ids = np.random.choice(ids, size=self.args.n_select_sample, p=ps).tolist()
-            elif self.args.method_select == "greedy":
-                select_ids = sorted(ids, key=lambda x: values[x], reverse=True)[:self.args.n_select_sample]
-            select_new_ys = [new_ys[select_id] for select_id in select_ids]
-
-            if to_print:
-                sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda x: x[1], reverse=True))
-                print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
-
-            infos.append({"step": step, "x": x, "ys": ys, "new_ys": new_ys, "values": values, "select_new_ys": select_new_ys})
-            ys = select_new_ys
-
-        if to_print:
-            print(ys)
-        return ys, {"steps": infos}
-
-    # ── Federated solver ───────────────────────────────────────────────
+    def _get_strategy(self, name: str, task):
+        if not hasattr(self, "_strategy_cache"):
+            self._strategy_cache = {}
+        key = (name, type(task).__name__, task.steps)
+        if key not in self._strategy_cache:
+            from federated_mcts.federation.task_assign import get_strategy
+            self._strategy_cache[key] = get_strategy(name, total_steps=task.steps)
+        return self._strategy_cache[key]
 
     def federated_solve(self, task, idx, to_print=True,
                         assign_strategy=None, **kwargs):
         x = task.get_input(idx)
         ys = [""]
         infos = []
+        search_policy = getattr(self.args, "search_policy", "baseline")
+        diverse_search = DiverseSearch(self.args) if search_policy == "diverse" else None
+        dqn_session = build_dqn_session(self.args) if search_policy == "dqn" else None
+        self.dqn_session = dqn_session
 
         client_names = list(self.gpts.keys())
         if not client_names:
-            raise ValueError("No clients available for federated solving")
+            raise NoClientsConfiguredError
 
         # Initialize assignment strategy
         from federated_mcts.federation.task_assign import (
-            get_strategy, BaseAssignStrategy, RoundRobinStrategy,
+            BaseAssignStrategy, RoundRobinStrategy,
         )
-        if assign_strategy is None:
-            strategy = RoundRobinStrategy(eval_client="remote_client")
-        elif isinstance(assign_strategy, str):
-            strategy = get_strategy(assign_strategy, total_steps=task.steps)
-        elif isinstance(assign_strategy, BaseAssignStrategy):
-            strategy = assign_strategy
-        else:
-            # Backward compat: bare callable function
-            strategy = RoundRobinStrategy(eval_client="remote_client")
-            self._legacy_assign_fn = assign_strategy
+        match assign_strategy:
+            case None:
+                strategy = RoundRobinStrategy(eval_client="remote_client")
+            case str() as strategy_name:
+                strategy = self._get_strategy(strategy_name, task)
+            case BaseAssignStrategy() as strategy_instance:
+                strategy = strategy_instance
+            case legacy if callable(legacy):
+                strategy = RoundRobinStrategy(eval_client="remote_client")
+                self._legacy_assign_fn = legacy
+            case unreachable:
+                assert_never(unreachable)
 
         for step in range(task.steps):
             if to_print:
@@ -242,26 +141,78 @@ class FederatedSolver:
             else:
                 task_assignments = strategy.assign(client_names, ys, context)
 
-            all_new_ys, all_values, step_infos = [], [], []
+            active_count = len([a for a in task_assignments if a["ys"]])
+            n_gen = ceil(self.args.n_generate_sample / active_count) if active_count else self.args.n_generate_sample
 
-            for assignment in task_assignments:
-                if assignment["ys"]:
-                    if to_print:
-                        print(f"Client {assignment['solve_client']} (eval: {assignment['eval_client']}) processing: {assignment['ys']}")
+            all_new_ys, all_values, step_infos, client_times_result = self._run_assignments(
+                task, x, step, task_assignments, to_print, n_gen,
+            )
 
-                    n_gen = ceil(self.args.n_generate_sample / len([a for a in task_assignments if a["ys"]]))
-                    client_new_ys, client_values, client_info, client_times = self._client_step(
-                        task, x, assignment["ys"], step,
-                        assignment["solve_client"], assignment["eval_client"],
-                        to_print, n_generate_sample=n_gen,
-                    )
+            for client_name, times in client_times_result.items():
+                step_client_times[client_name]["generation"] += times["generation"]
+                step_client_times[client_name]["evaluation"] += times["evaluation"]
 
-                    step_client_times[assignment["solve_client"]]["generation"] += client_times["generation"]
-                    step_client_times[assignment["eval_client"]]["evaluation"] += client_times["evaluation"]
+            stopped = False
+            search_metrics = None
+            dqn_transitions = None
+            if (diverse_search is not None or dqn_session is not None) and all_new_ys:
+                eval_client_name = "remote_client" if "remote_client" in self.gpts else next(
+                    assignment["eval_client"] for assignment in task_assignments if assignment["ys"]
+                )
+            if diverse_search is not None and all_new_ys:
+                raw_candidate_count = len(all_new_ys)
+                ranking_start = time.time()
+                decision = diverse_search.decide(
+                    self.args,
+                    task,
+                    x,
+                    all_new_ys,
+                    self.gpts[eval_client_name],
+                    eval_client_name,
+                )
+                step_client_times[eval_client_name]["evaluation"] += time.time() - ranking_start
+                all_new_ys = decision.candidates
+                all_values = decision.values
+                select_new_ys = decision.selected
+                stopped = decision.stopped
+                value_by_state = {
+                    state_key(task, x, candidate): value
+                    for candidate, value in zip(all_new_ys, all_values)
+                }
+                for client_info in step_infos:
+                    client_info["values"] = [
+                        value_by_state.get(state_key(task, x, candidate), 0.0)
+                        for candidate in client_info.get("output_ys", [])
+                    ]
+                search_metrics = {
+                    "raw_candidates": raw_candidate_count,
+                    "unique_states": len(all_new_ys),
+                    "beam_width": len(select_new_ys),
+                }
 
-                    all_new_ys.extend(client_new_ys)
-                    all_values.extend(client_values)
-                    step_infos.append(client_info)
+            if dqn_session is not None and all_new_ys:
+                outcome = dqn_session.process_step(
+                    args=self.args,
+                    task=task,
+                    x=x,
+                    candidates=all_new_ys,
+                    client=self.gpts[eval_client_name],
+                    evaluator_id=eval_client_name,
+                    step=step,
+                    total_steps=task.steps,
+                    step_tokens=0.0,
+                    step_latency=sum(
+                        times["generation"] + times["evaluation"]
+                        for times in client_times_result.values()
+                    ),
+                )
+                all_new_ys = outcome.candidates
+                all_values = outcome.values
+                select_new_ys = outcome.selected
+                stopped = outcome.stopped
+                search_metrics = outcome.search_metrics
+                step_client_times[eval_client_name]["evaluation"] += outcome.eval_seconds
+                dqn_transitions = outcome.transitions
 
             self.time_tracker.accumulate_step(step_client_times)
 
@@ -279,93 +230,41 @@ class FederatedSolver:
                 all_new_ys = ys.copy()
                 all_values = [1.0] * len(ys)
 
-            ids = list(range(len(all_new_ys)))
-            if self.args.method_select == "sample" and sum(all_values) > 0:
-                ps = np.array(all_values) / sum(all_values)
-                select_ids = np.random.choice(ids, size=min(self.args.n_select_sample, len(ids)), p=ps).tolist()
-            elif self.args.method_select == "greedy":
-                select_ids = sorted(ids, key=lambda x: all_values[x], reverse=True)[:self.args.n_select_sample]
-            else:
-                select_ids = ids[:self.args.n_select_sample]
-
-            select_new_ys = [all_new_ys[select_id] for select_id in select_ids]
+            if diverse_search is None and dqn_session is None:
+                ids = list(range(len(all_new_ys)))
+                if self.args.method_select == "sample" and sum(all_values) > 0:
+                    ps = np.array(all_values) / sum(all_values)
+                    select_ids = np.random.choice(ids, size=min(self.args.n_select_sample, len(ids)), p=ps).tolist()
+                elif self.args.method_select == "greedy":
+                    select_ids = sorted(ids, key=lambda x: all_values[x], reverse=True)[:self.args.n_select_sample]
+                else:
+                    select_ids = ids[:self.args.n_select_sample]
+                select_new_ys = [all_new_ys[select_id] for select_id in select_ids]
 
             if to_print and all_new_ys and all_values:
                 sorted_new_ys, sorted_values = zip(*sorted(zip(all_new_ys, all_values), key=lambda x: x[1], reverse=True))
                 print(f"-- new_ys --: {sorted_new_ys[:5]}\n-- sol values --: {sorted_values[:5]}\n-- choices --: {select_new_ys}\n")
 
-            infos.append({
+            step_info = {
                 "step": step, "x": x, "ys": ys, "new_ys": all_new_ys,
                 "values": all_values, "select_new_ys": select_new_ys,
                 "client_infos": step_infos, "task_assignments": task_assignments,
                 "step_client_times": step_client_times,
-            })
+                "search_metrics": search_metrics,
+            }
+            if dqn_session is not None:
+                step_info["dqn_transitions"] = dqn_transitions if dqn_transitions is not None else []
+            infos.append(step_info)
             ys = select_new_ys
+            if stopped:
+                break
+
+        if dqn_session is not None:
+            dqn_session.finish_episode()
+            remaining = dqn_session.drain_transitions()
+            if remaining and infos:
+                infos[-1].setdefault("dqn_transitions", []).extend(remaining)
 
         if to_print:
             print(f"Final results: {ys}")
         return ys, {"steps": infos}
-
-    # ── Per-client step ────────────────────────────────────────────────
-
-    def _client_step(self, task, x, client_ys, step, solve_client_name, eval_client_name,
-                     to_print=False, n_generate_sample=None, uncertainty_backoff=False, uncertainty_threshold=0.8):
-        uncertainty_calculator = Uncertainty(uncertainty_threshold=uncertainty_threshold, uncertainty_method="entropy")
-        solve_gpt = self.gpts[solve_client_name]
-        eval_gpt = self.gpts[eval_client_name]
-        new_ys = []
-        n_gen = n_generate_sample if n_generate_sample else self.args.n_generate_sample
-
-        gen_start = time.time()
-        for y in client_ys:
-            if self.args.method_generate == "sample":
-                result = get_samples(self.args, task, x, y, n_generate_sample=n_gen,
-                                     prompt_sample=self.args.prompt_sample, stop=task.stops[step],
-                                     client=solve_gpt, get_logprobs=uncertainty_backoff)
-                if uncertainty_backoff:
-                    samples, logprobs = result
-                    scores = uncertainty_calculator.calculate_uncertainty(logprobs) if not isinstance(uncertainty_calculator.calculate_uncertainty(logprobs[0]), bool) else                               [float(uncertainty_calculator.calculate_uncertainty(logprobs))]
-                    # Simplified: just extend with all samples for now
-                    samples_to_add = samples
-                    if isinstance(result, tuple):
-                        samples_to_add = result[0] if not uncertainty_backoff else result if not isinstance(result, tuple) else result[0]
-                else:
-                    samples_to_add = result
-                new_ys.extend(samples_to_add if isinstance(samples_to_add, list) else [samples_to_add])
-            elif self.args.method_generate == "propose":
-                proposals = get_proposals(self.args, step, task, x, y, client=solve_gpt, get_logprobs=uncertainty_backoff)
-                if uncertainty_backoff and isinstance(proposals, tuple):
-                    proposals = proposals[0]
-                new_ys.extend(proposals)
-        gen_time = time.time() - gen_start
-
-        # Deduplicate
-        unique, seen = [], set()
-        for y in new_ys:
-            if y not in seen:
-                unique.append(y)
-                seen.add(y)
-        new_ys = unique
-
-        eval_start = time.time()
-        if new_ys:
-            if self.args.method_evaluate == "vote":
-                values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
-            elif self.args.method_evaluate == "value":
-                values = get_values(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
-            else:
-                values = [1.0] * len(new_ys)
-        else:
-            values = []
-        eval_time = time.time() - eval_start
-
-        client_info = {
-            "solve_client_name": solve_client_name, "eval_client_name": eval_client_name,
-            "input_ys": client_ys, "output_ys": new_ys, "values": values, "step": step,
-        }
-        client_times = {"generation": gen_time, "evaluation": eval_time}
-
-        if to_print:
-            print(f"Client {solve_client_name} (eval: {eval_client_name}) generated {len(new_ys)} proposals with values {values[:5]}")
-
-        return new_ys, values, client_info, client_times
