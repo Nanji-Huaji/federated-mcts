@@ -84,7 +84,7 @@ class StandardSolversMixin:
                 step_info["dqn_transitions"] = outcome.transitions
                 infos.append(step_info)
                 ys = outcome.selected
-                if outcome.stopped:
+                if outcome.stopped or not ys:
                     break
                 continue
 
