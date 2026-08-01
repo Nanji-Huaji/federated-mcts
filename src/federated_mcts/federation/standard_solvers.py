@@ -44,6 +44,8 @@ class StandardSolversMixin:
                 case unreachable:
                     assert_never(unreachable)
             new_ys = list(itertools.chain(*new_ys))
+            if not new_ys:
+                break
             ids = list(range(len(new_ys)))
 
             if diverse_search is not None:
