@@ -15,5 +15,17 @@ def get_task(name):
         from tot.tasks.gsm8k import GSM8KTask
 
         return GSM8KTask()
+    elif name == "wikilogic":
+        from federated_mcts.tasks.folio import WikiLogicTask
+
+        return WikiLogicTask()
+    elif name == "hyblogic":
+        from federated_mcts.tasks.folio import HybLogicTask
+
+        return HybLogicTask()
+    elif name == "blocksworld":
+        from federated_mcts.tasks.blocksworld import BlocksworldTask
+
+        return BlocksworldTask()
     else:
         raise NotImplementedError

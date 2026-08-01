@@ -23,6 +23,8 @@ def get_proposals_with_check(
     api_base=None,
     model=None,
     client=None,
+    get_logprobs=False,
+    n_generate=4,
 ):
     # jinyu:
     need_generate = task.pre_generate_check(y) if hasattr(task, "pre_generate_check") else True
@@ -30,38 +32,40 @@ def get_proposals_with_check(
         return [y]
 
     new_proposal_list, run_times = [], 0
-    time_constraint, len_constraint = 6, 4
+    time_constraint, len_constraint = 2, 4
 
     while len(new_proposal_list) < len_constraint and run_times < time_constraint:  # Generate at least 4 proposals
 
         propose_prompt = task.propose_prompt_wrap(x, y)
         if client is None:
-            proposals = gpt(
+            completions = gpt(
                 args,
                 propose_prompt,
-                n=1,
+                n=n_generate,
                 stop=None,
                 api_key=api_key,
                 api_base=api_base,
                 model=model,
-            )[
-                0
-            ].split("\n")
+            )
         else:
-            proposals = client(args, propose_prompt, n=1, stop=None)[0].split("\n")
-        # jinyu: check the format
-        for pro in proposals:
-            if hasattr(task, "process_generate_result") and args.check_format:
-                is_correct, updated_new_proposal = task.process_generate_result(pro, x, y, args.check_format)
-                if is_correct:
-                    if updated_new_proposal not in new_proposal_list:
-                        new_proposal_list.append(updated_new_proposal)
+            completions = client(args, propose_prompt, n=n_generate, stop=None)
+        # jinyu: iterate all completions, split each by line
+        for completion in completions:
+            for pro in completion.split("\n"):
+                if hasattr(task, "process_generate_result") and args.check_format:
+                    is_correct, updated_new_proposal = task.process_generate_result(pro, x, y, args.check_format)
+                    if is_correct:
+                        if updated_new_proposal not in new_proposal_list:
+                            new_proposal_list.append(updated_new_proposal)
         run_times += 1
 
     if run_times >= time_constraint:
         print("runtime ", run_times)
     if len(new_proposal_list) == 0:
-        return [y]
+        # Optional hook: blocksworld returns [] so invalid branches die; the
+        # historical [y] fallback stays for tasks without the hook.
+        no_candidate_hook = getattr(task, "on_no_valid_candidates", None)
+        return no_candidate_hook(y) if no_candidate_hook is not None else [y]
     return new_proposal_list
 
 
@@ -75,6 +79,7 @@ def get_proposals_without_check(
     api_base=None,
     model=None,
     client=None,
+    get_logprobs=False,
 ):
     propose_prompt = task.propose_prompt_wrap(x, y)
     if client is None:
@@ -107,6 +112,7 @@ def get_proposals(
     model=None,
     client=None,
     get_logprobs=False,
+    n_generate=4,
 ):
     if args.check_format:
         return get_proposals_with_check(
@@ -120,6 +126,7 @@ def get_proposals(
             model=model,
             client=client,
             get_logprobs=get_logprobs,
+            n_generate=n_generate,
         )
     # else:
     #     return get_proposals_without_check(

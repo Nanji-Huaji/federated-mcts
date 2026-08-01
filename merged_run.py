@@ -53,7 +53,15 @@ def run(args, solve_function):
 
     logs, cnt_avg, cnt_any = [], 0, 0
 
-    for i in range(args.task_start_index, args.task_end_index):
+    task_indices = range(args.task_start_index, args.task_end_index)
+    if getattr(args, "task_split", None):
+        with open(f"data/splits/{args.task}.json") as f:
+            task_indices = list(json.load(f)[args.task_split])
+        print(
+            "Using %s split: %d tasks, indices %d..%d"
+            % (args.task_split, len(task_indices), task_indices[0], task_indices[-1])
+        )
+    for i in task_indices:
         ys = [""]
         print(f"Task {i}")
         task = get_task(args.task)
@@ -93,7 +101,7 @@ def run(args, solve_function):
         cnt_any += any(accs)
         print(i, "sum(accs)", sum(accs), "cnt_avg", cnt_avg, "cnt_any", cnt_any, "\n")
 
-    n = args.task_end_index - args.task_start_index
+    n = len(task_indices)
     print("The average sum is ", cnt_avg / n, ". The accuracy is: ", cnt_any / n)
     print("Token consumption: ", token_consumption)
     res_json = {
@@ -144,7 +152,16 @@ def parse_args():
         default="qwen2.5-32b-instruct",
     )
     args.add_argument("--temperature", type=float, default=0.9)
-    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords", "gsm8k"])
+    args.add_argument(
+        "--task", type=str, required=True, choices=["game24", "text", "crosswords", "gsm8k", "wikilogic", "hyblogic", "blocksworld"]
+    )
+    args.add_argument(
+        "--task_split",
+        type=str,
+        default=None,
+        choices=["train", "val", "test"],
+        help="use predefined split from data/splits/{task}.json (overrides --task_start/--task_end)",
+    )
     args.add_argument("--task_start_index", type=int, default=900)
     args.add_argument("--task_end_index", type=int, default=1000)
     args.add_argument("--naive_run", action="store_true")
