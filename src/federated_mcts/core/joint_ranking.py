@@ -68,7 +68,10 @@ def evaluate_ranked_candidates(
         )
 
     for index, score in zip(missing_ids, scores or []):
-        numeric_score = float(score)
+        if score is None:
+            numeric_score = 0.0
+        else:
+            numeric_score = float(score)
         values[index] = numeric_score
         cache[(task_id, evaluator_id, state_key(task, x, candidates[index]))] = numeric_score
-    return [float(value) for value in values]
+    return [0.0 if value is None else float(value) for value in values]

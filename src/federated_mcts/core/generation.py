@@ -9,7 +9,7 @@ import time
 from federated_mcts.tasks import get_task
 import json
 from math import ceil
-from typing import Tuple, List, Dict, Callable, Union
+from typing import Literal, Tuple, List, Dict, Callable, Union, overload
 import federated_mcts.utils.uncertainty as uncertainty
 
 
@@ -25,13 +25,14 @@ def get_proposals_with_check(
     client=None,
     get_logprobs=False,
     n_generate=4,
-):
+) -> list[str]:
     # jinyu:
     need_generate = task.pre_generate_check(y) if hasattr(task, "pre_generate_check") else True
     if need_generate == False:  # no need to generate new proposals
         return [y]
 
-    new_proposal_list, run_times = [], 0
+    new_proposal_list: list[str] = []
+    run_times = 0
     time_constraint, len_constraint = 2, 4
 
     while len(new_proposal_list) < len_constraint and run_times < time_constraint:  # Generate at least 4 proposals
@@ -80,7 +81,7 @@ def get_proposals_without_check(
     model=None,
     client=None,
     get_logprobs=False,
-):
+) -> list[str]:
     propose_prompt = task.propose_prompt_wrap(x, y)
     if client is None:
         proposals = gpt(
@@ -113,7 +114,7 @@ def get_proposals(
     client=None,
     get_logprobs=False,
     n_generate=4,
-):
+)-> list[str]:
     if args.check_format:
         return get_proposals_with_check(
             args,
@@ -128,10 +129,52 @@ def get_proposals(
             get_logprobs=get_logprobs,
             n_generate=n_generate,
         )
-    # else:
-    #     return get_proposals_without_check(
-    #         args, step, task, x, y, api_key=api_key, api_base=api_base, model=model, client=client
-    #     )
+    return get_proposals_without_check(
+        args,
+        step,
+        task,
+        x,
+        y,
+        api_key=api_key,
+        api_base=api_base,
+        model=model,
+        client=client,
+        get_logprobs=get_logprobs,
+    )
+
+
+@overload
+def get_samples(
+    args,
+    task,
+    x,
+    y,
+    n_generate_sample,
+    prompt_sample,
+    stop,
+    api_key=None,
+    api_base=None,
+    model=None,
+    client=None,
+    get_logprobs: Literal[False] = False,
+) -> list[str]: ...
+
+
+@overload
+def get_samples(
+    args,
+    task,
+    x,
+    y,
+    n_generate_sample,
+    prompt_sample,
+    stop,
+    api_key=None,
+    api_base=None,
+    model=None,
+    client=None,
+    get_logprobs: Literal[True] = True,
+) -> tuple[list[str], list[float]]: ...
 
 
 def get_samples(
@@ -146,8 +189,8 @@ def get_samples(
     api_base=None,
     model=None,
     client=None,
-    get_logprobs=False,
-):
+    get_logprobs: bool = False,
+) -> list[str] | tuple[list[str], list[float]]:
     if prompt_sample == "standard":
         prompt = task.standard_prompt_wrap(x, y)
     elif prompt_sample == "cot":
@@ -164,7 +207,7 @@ def get_samples(
             api_key=api_key,
             api_base=api_base,
             model=model,
-            logprobs=get_logprobs,
+            get_logprobs=get_logprobs,
         )
     else:
         samples_result = client(

@@ -18,15 +18,15 @@ def solve(args, task, idx, to_print=True):
     for step in range(task.steps):
         # generation
         if args.method_generate == "sample":
-            new_ys = [
+            candidate_batches = [
                 get_samples(
                     args, task, x, y, args.n_generate_sample, prompt_sample=args.prompt_sample, stop=task.stops[step]
                 )
                 for y in ys
             ]
         elif args.method_generate == "propose":
-            new_ys = [get_proposals(args, step, task, x, y) for y in ys]
-        new_ys = list(itertools.chain(*new_ys))
+            candidate_batches = [get_proposals(args, step, task, x, y) for y in ys]
+        new_ys: list[str] = list(itertools.chain.from_iterable(candidate_batches))
         ids = list(range(len(new_ys)))
         # evaluation
         if args.method_evaluate == "vote":
