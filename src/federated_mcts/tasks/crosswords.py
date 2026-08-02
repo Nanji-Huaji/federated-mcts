@@ -8,10 +8,13 @@ from federated_mcts.models.api_client import gpt
 
 class MiniCrosswordsEnv:
     def __init__(self, file="mini0505.json"):
-        self.file = os.path.join(DATA_PATH, "crosswords", file)
+        file_path = os.path.join(DATA_PATH, "crosswords", file)
 
-        self.file = json.load(open(self.file))
-        self.n = len(self.file)
+        raw_file = json.load(open(file_path))
+        self.records: list[tuple[list[str], list[str]]] = [
+            (entry[0], entry[1]) for entry in raw_file
+        ]
+        self.n = len(self.records)
         self.cache = {}
         self.idx = None
         self.times = 0
@@ -22,7 +25,7 @@ class MiniCrosswordsEnv:
 
     def reset(self, idx, board=None, status=None, steps=None):
         self.idx = idx
-        self.data, self.board_gt = self.file[idx]
+        self.data, self.board_gt = self.records[idx]
         self.board = ["_"] * 25
         self.ans = ["_____"] * 10
         self.ans_gt = self.get_ans(self.board_gt)
@@ -49,7 +52,7 @@ class MiniCrosswordsEnv:
             if prompt in self.prompt_status_cache:
                 res = self.prompt_status_cache[prompt]
             else:
-                res = gpt(prompt)[0]
+                res = gpt(None, prompt)[0]
                 self.prompt_status_cache[prompt] = res
             # print(line)
             # print(res)
@@ -238,7 +241,7 @@ class MiniCrosswordsTask(Task):
 
     def propose_outputs_unwrap(self, x: str, y: str, outputs: list, n_max_propose: int) -> list:
         confidence_to_value = {"certain": 1, "high": 0.5, "medium": 0.2, "low": 0.1}  # TODO: ad hoc
-        proposals_to_scores = {}
+        proposals_to_scores: dict[str, float] = {}
         for output in outputs:
             lines = output.split("\n")
             pattern = r"^([hv][1-5])\. ([a-zA-Z]{5,5}) \((certain|high|medium|low)\).*$"
@@ -250,14 +253,14 @@ class MiniCrosswordsTask(Task):
                     score = confidence_to_value.get(parts[2], 0)
                     proposals_to_scores[proposal] = proposals_to_scores.get(proposal, 0) + score
 
-        proposals = sorted(proposals_to_scores.items(), key=lambda x: x[1], reverse=True)
+        ranked_proposals = sorted(proposals_to_scores.items(), key=lambda x: x[1], reverse=True)
         if n_max_propose != -1:
-            proposals = proposals[:n_max_propose]
-        proposals = [y + proposal[0] + "\n" for proposal in proposals]
+            ranked_proposals = ranked_proposals[:n_max_propose]
+        proposals = [y + proposal[0] + "\n" for proposal in ranked_proposals]
         self.cache_proposals[(x, y, n_max_propose)] = proposals
         return proposals
 
-    def evaluate(self, x: str, y: str, n_evaluate_sample: int) -> int:
+    def evaluate(self, x: str, y: str, n_evaluate_sample: int) -> dict[str, int]:
         self.set_status(x, y)
         assert n_evaluate_sample == 1  # TODO: ad hoc
         count = {"sure": 0, "maybe": 0, "impossible": 0}
@@ -267,7 +270,7 @@ class MiniCrosswordsTask(Task):
             ans = " ".join(ans.lower())
             line = f"{data}: {ans}"
             prompt = value_prompt.format(input=line)
-            res = gpt(prompt)[0]
+            res = gpt(None, prompt)[0]
             print(line)
             print(res)
             print()
