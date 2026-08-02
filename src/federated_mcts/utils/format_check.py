@@ -1,8 +1,9 @@
 from collections import Counter
+from typing import Tuple
 import re
 import math
 
-def check_and_fix_last_line(new_proposal: str, x: str = "") -> (bool, str):
+def check_and_fix_last_line(new_proposal: str, x: str = "") -> Tuple[bool, str]:
     # Get the last two lines 获取最后的2次操作
     lines = new_proposal.strip().split('\n')
     last_line = lines[-1]
@@ -116,7 +117,7 @@ def check_and_fix_last_line(new_proposal: str, x: str = "") -> (bool, str):
 
     return True, new_proposal
 
-def check_final_result(last_line: str, pre_line: str = "", x: str = "") -> (bool, str):
+def check_final_result(last_line: str, pre_line: str = "", x: str = "") -> Tuple[bool, str]:
     # Get the last two lines 获取最后的2次操作
     # lines = new_proposal.strip().split('\n')
     # last_line = lines[-1]
@@ -235,7 +236,7 @@ if __name__ == '__main__':
 
     x='1 1 4 6'
     final = '\n4 - 1 = 2 (left: 1 3 6)\n3 +6 = 9 (left: 1 9)\n\n1 * 9 = 9 (left: 9)\n\n'
-    final = final.split('\n')
+    final_lines = final.split('\n')
     final_list = list(filter(None, final))
     print(final_list)
     for idx, line in enumerate(final_list):
