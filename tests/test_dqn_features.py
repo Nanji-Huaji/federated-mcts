@@ -19,7 +19,7 @@ from federated_mcts.core.dqn.features import (
     extract_state_features,
 )
 
-# indices of the 12-dim base vector (index 11 is the previous-step range)
+# indices of the 16-dim base vector (index 11 is the previous-step range)
 _STRUCTURAL = (0, 1, 2)
 _VALUE_STATS = (3, 4, 5, 6, 7, 11)
 
@@ -41,22 +41,22 @@ def _extract(**kwargs):
 
 
 class TestStateFeatureExtraction(unittest.TestCase):
-    def test_default_state_is_12_dim_finite_and_normalized(self):
+    def test_default_state_is_16_dim_finite_and_normalized(self):
         """Given a representative pre-decision structure, when the state is
         extracted, then it has 12 dims, all finite and inside [0, 1]."""
         state = _extract()
 
-        self.assertEqual(state.shape, (12,))
+        self.assertEqual(state.shape, (16,))
         self.assertTrue(np.all(np.isfinite(state)))
         self.assertTrue(np.all((state >= 0.0) & (state <= 1.0)))
 
-    def test_optional_joint_rank_flag_extends_to_13_dim(self):
+    def test_optional_joint_rank_flag_extends_to_17_dim(self):
         """Given include of the previous joint-rank flag, when the state is
-        extracted, then the vector has 13 dims and the flag feature is 1.0."""
+        extracted, then the vector has 17 dims and the flag feature is 1.0."""
         state = _extract(previous_joint_rank=True)
 
-        self.assertEqual(state.shape, (13,))
-        self.assertEqual(state[12], 1.0)
+        self.assertEqual(state.shape, (17,))
+        self.assertEqual(state[16], 1.0)
 
     def test_structural_features_do_not_depend_on_value_stats(self):
         """Given identical candidate/dedup structure, when only the previous

@@ -9,7 +9,7 @@ from federated_mcts.core.dqn.session import DqnSearchSession
 
 def build_dqn_session(args, *, jsonl_path: str | None = None) -> DqnSearchSession:
     controller = BudgetAwareDQNController(
-        state_dim=getattr(args, "dqn_state_dim", 12),
+        state_dim=getattr(args, "dqn_state_dim", 16),
         action_count=ACTION_COUNT,
         epsilon=getattr(args, "dqn_epsilon", 1.0),
         seed=getattr(args, "dqn_seed", getattr(args, "seed", 0)),
