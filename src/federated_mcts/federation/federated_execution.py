@@ -1,18 +1,33 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import TypedDict
 from federated_mcts.utils.exhaustive import assert_never
 
 from federated_mcts.core.evaluation import get_values, get_votes
 from federated_mcts.core.generation import get_proposals, get_samples
 from federated_mcts.utils.uncertainty import Uncertainty
+from federated_mcts.federation.standard_solvers import GenerationClient, StandardSolverArgs
+from federated_mcts.federation.time_tracker import ClientTiming
+
+
+class ClientStepInfo(TypedDict):
+    solve_client_name: str
+    eval_client_name: str
+    input_ys: list[str]
+    output_ys: list[str]
+    values: list[float]
+    step: int
 
 
 class FederatedExecutionMixin:
+    args: StandardSolverArgs
+    gpts: dict[str, GenerationClient]
+
     def _run_assignments(self, task, x, step, task_assignments, to_print, n_gen):
-        all_new_ys = []
-        all_values = []
-        step_infos = []
-        step_client_times = {}
+        all_new_ys: list[str] = []
+        all_values: list[float] = []
+        step_infos: list[ClientStepInfo] = []
+        step_client_times: dict[str, ClientTiming] = {}
 
         jobs = [(index, assignment) for index, assignment in enumerate(task_assignments) if assignment["ys"]]
         if not jobs:
@@ -30,7 +45,9 @@ class FederatedExecutionMixin:
                 )
                 futures[future] = positions[original]
 
-            results = [None] * len(jobs)
+            results: list[tuple[list[str], list[float], ClientStepInfo, ClientTiming]] = [
+                ([], [], {"solve_client_name": "", "eval_client_name": "", "input_ys": [], "output_ys": [], "values": [], "step": 0}, {"generation": 0.0, "evaluation": 0.0})
+            ] * len(jobs)
             for future in as_completed(futures):
                 results[futures[future]] = future.result()
 
@@ -59,7 +76,7 @@ class FederatedExecutionMixin:
         )
         solve_gpt = self.gpts[solve_client_name]
         eval_gpt = self.gpts[eval_client_name]
-        new_ys = []
+        new_ys: list[str] = []
         n_gen = n_generate_sample if n_generate_sample else self.args.n_generate_sample
 
         generation_start = time.time()
@@ -104,11 +121,11 @@ class FederatedExecutionMixin:
             values = []
         evaluation_time = time.time() - evaluation_start
 
-        client_info = {
+        client_info: ClientStepInfo = {
             "solve_client_name": solve_client_name, "eval_client_name": eval_client_name,
             "input_ys": client_ys, "output_ys": new_ys, "values": values, "step": step,
         }
-        client_times = {"generation": generation_time, "evaluation": evaluation_time}
+        client_times: ClientTiming = {"generation": generation_time, "evaluation": evaluation_time}
 
         if to_print:
             print(

@@ -16,11 +16,11 @@ from federated_mcts.core.diverse_search import DiverseSearch
 from federated_mcts.core.dqn.factory import build_dqn_session
 from federated_mcts.core.search_policy import state_key
 from federated_mcts.federation.federated_execution import FederatedExecutionMixin
-from federated_mcts.federation.standard_solvers import StandardSolversMixin
+from federated_mcts.federation.standard_solvers import GenerationClient, StandardSolversMixin
 from federated_mcts.federation.task_assign import (
     TaskAssignment,
 )
-from federated_mcts.federation.time_tracker import TimeTracker
+from federated_mcts.federation.time_tracker import ClientTiming, TimeTracker
 
 
 class NoClientsConfiguredError(RuntimeError):
@@ -57,7 +57,7 @@ class FederatedSolver(StandardSolversMixin, FederatedExecutionMixin):
                 model["api_base"] = "https://try-chatapi.com/v1"
                 print(f"Warning: No API base found for {model['client_name']}, using default base.")
 
-        self.gpts = {}
+        self.gpts: dict[str, GenerationClient] = {}
         for model_cfg in self.model_config:
             client_name = model_cfg["client_name"]
             if model_cfg.get("type") == "vllm":
@@ -109,9 +109,8 @@ class FederatedSolver(StandardSolversMixin, FederatedExecutionMixin):
             raise NoClientsConfiguredError
 
         # Initialize assignment strategy
-        from federated_mcts.federation.task_assign import (
-            BaseAssignStrategy, RoundRobinStrategy,
-        )
+        from federated_mcts.federation.task_assign import BaseAssignStrategy, RoundRobinStrategy, AssignmentContext
+        strategy: BaseAssignStrategy
         match assign_strategy:
             case None:
                 strategy = RoundRobinStrategy(eval_client="remote_client")
@@ -129,9 +128,11 @@ class FederatedSolver(StandardSolversMixin, FederatedExecutionMixin):
             if to_print:
                 print(f"Step {step} of {task.steps} in Task {idx}")
 
-            step_client_times = {name: {"generation": 0.0, "evaluation": 0.0} for name in client_names}
+            step_client_times: dict[str, ClientTiming] = {
+                name: {"generation": 0.0, "evaluation": 0.0} for name in client_names
+            }
                         # Build context and assign tasks to clients
-            context = {
+            context: AssignmentContext = {
                 "step": step,
                 "total_steps": task.steps,
                 "task_name": task.__class__.__name__,

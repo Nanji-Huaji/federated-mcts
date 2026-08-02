@@ -5,7 +5,10 @@ the existing api_client.gpt() with vLLM-specific defaults and helpers.
 """
 
 from functools import partial
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Dict, Optional
+
+if TYPE_CHECKING:
+    from federated_mcts.federation.standard_solvers import StandardSolverArgs
 
 from federated_mcts.models.api_client import gpt
 
@@ -37,7 +40,15 @@ class VLLMClient:
         self.max_tokens = max_tokens
         self.extra_params = kwargs
 
-    def __call__(self, args, prompt, n=1, stop=None, **kwargs):
+    def __call__(
+        self,
+        args: "StandardSolverArgs",
+        prompt: str,
+        n: int = 1,
+        stop: str | list[str] | None = None,
+        get_logprobs: bool = False,
+        **kwargs,
+    ) -> list[str]:
         """Call vLLM endpoint via the OpenAI-compatible API."""
         return gpt(
             args,

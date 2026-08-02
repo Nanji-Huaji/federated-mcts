@@ -169,23 +169,22 @@ class DifficultyBasedStrategy(BaseAssignStrategy):
         n_local = max(1, round(len(ys) * local_ratio)) if local_ratio > 0 else 0
         n_local = min(n_local, len(ys))
 
-        eval_client = local_model if self.local_is_eval else remote_model
-
-        assignments: List[TaskAssignment] = []
+        difficulty_eval_client: str = local_model if self.local_is_eval and local_model is not None else remote_model
+        difficulty_assignments: List[TaskAssignment] = []
         if local_model and n_local > 0:
-            assignments.append(TaskAssignment(
+            difficulty_assignments.append(TaskAssignment(
                 solve_client=local_model,
-                eval_client=eval_client,
+                eval_client=difficulty_eval_client,
                 ys=ys[:n_local],
             ))
         if remote_model and n_local < len(ys):
-            assignments.append(TaskAssignment(
+            difficulty_assignments.append(TaskAssignment(
                 solve_client=remote_model,
                 eval_client=remote_model,
                 ys=ys[n_local:],
             ))
 
-        return assignments
+        return difficulty_assignments
 
 
 # ── Contextual Bandit ─────────────────────────────────────────────────
@@ -276,7 +275,7 @@ class ContextualBanditStrategy(BaseAssignStrategy):
         # Allocate ys proportionally
         remote_model = model_list[1] if len(model_list) >= 2 else model_list[0]
         n_total = len(ys)
-        assignments: List[TaskAssignment] = []
+        bandit_assignments: List[TaskAssignment] = []
         offset = 0
 
         # Ensure minimum allocation per model to prevent lockout
@@ -290,14 +289,14 @@ class ContextualBanditStrategy(BaseAssignStrategy):
             n_model = min(n_model, n_total - offset)
 
             if n_model > 0:
-                assignments.append(TaskAssignment(
+                bandit_assignments.append(TaskAssignment(
                     solve_client=model,
                     eval_client=remote_model,
                     ys=ys[offset:offset + n_model],
                 ))
                 offset += n_model
 
-        return assignments
+        return bandit_assignments
 
     def update(self, context: AssignmentContext, rewards: Dict[str, float]) -> None:
         """Update bandit with per-model reward from the completed step."""
