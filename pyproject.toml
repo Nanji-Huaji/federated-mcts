@@ -37,3 +37,7 @@ Homepage = "https://github.com/princeton-nlp/tree-of-thought-llm"
 [project.scripts]
 fmcts-run = "federated_mcts.cli:run_main"
 fmcts-exp = "federated_mcts.cli:exp_main"
+
+[tool.mypy]
+check_untyped_defs = true
+ignore_missing_imports = true
