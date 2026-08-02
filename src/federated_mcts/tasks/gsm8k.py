@@ -90,7 +90,7 @@ class GSM8KTask(Task):
             return {"r": 0}
 
     def test_output_modify(self, idx: int, output: str):
-        return self.test_output(idx, output)
+        return self.test_output(idx, output), output
 
     @staticmethod
     def standard_prompt_wrap(x: str, y: str = "") -> str:

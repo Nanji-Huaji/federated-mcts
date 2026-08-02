@@ -137,6 +137,25 @@ class Game24Task(Task):
         return value
 
     @staticmethod
+    def vote_prompt_wrap(x: str, ys: list) -> str:
+        from federated_mcts.prompts.game24 import vote_prompt
+        cs = chr(10).join(f"Choice {i}:\n{y}" for i, y in enumerate(ys))
+        return vote_prompt.format(x=x, cs=cs)
+
+    @staticmethod
+    def vote_outputs_unwrap(vote_outputs: list, n_candidates: int) -> list:
+        vote_results = [0] * n_candidates
+        for vote_output in vote_outputs:
+            pattern = r".*best choice is.*?(?<!-)(\d+)"
+            match = re.search(pattern, vote_output, re.DOTALL | re.IGNORECASE)
+            if match:
+                vote = int(match.group(1))
+                if 0 <= vote < n_candidates:
+                    vote_results[vote] += 1
+            else:
+                print(f"vote no match: {[vote_output]}")
+        return vote_results
+    @staticmethod
     def canonical_state_key(x: str, y: str):
         numbers = get_current_numbers(y if y.strip() else x).split()
         return tuple(sorted(Fraction(number) for number in numbers))

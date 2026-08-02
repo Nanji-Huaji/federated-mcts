@@ -590,3 +590,12 @@ Judge:"""
 # Input: {input}
 # Answer: {answer}
 # Judge:"""
+
+vote_prompt = """Given an input of 4 numbers and several choices for the next step toward reaching 24, decide which choice is most promising. Output exactly one line: "The best choice is {{s}}", where s is the integer id of the best choice. Do not output any other text.
+
+Input:
+{x}
+
+Choices:
+{cs}
+"""
