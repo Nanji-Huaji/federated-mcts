@@ -47,7 +47,7 @@ def _create_completion(client: openai.OpenAI, **kwargs):
 def gpt(
     args,
     prompt: str,
-    model: Optional[str] = "gpt-4",
+    model: str = "gpt-4",
     temperature: float = 0.9,
     max_tokens: int = 1000,
     n: int = 1,

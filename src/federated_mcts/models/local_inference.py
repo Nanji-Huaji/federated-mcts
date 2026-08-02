@@ -95,7 +95,7 @@ class UncertaintyInferenceFramework:
                     next_token = torch.argmax(sampling_logits, dim=-1, keepdim=True)
                 
                 # 计算不确定度（使用原始logits和生成的token）
-                uncertainty = uncertainty_fn(logits, next_token.item())
+                uncertainty = uncertainty_fn(logits, int(next_token.item()))
                 token_uncertainties.append(uncertainty)
                 
                 # 添加新token
