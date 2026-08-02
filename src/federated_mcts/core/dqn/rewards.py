@@ -13,7 +13,7 @@ def correctness_reward(is_success: bool) -> float:
     return 1.0 if is_success else 0.0
 
 
-def token_penalty(tokens: int, max_tokens: int = 1000) -> float:
+def token_penalty(tokens: float, max_tokens: int = 1000) -> float:
     if max_tokens <= 0:
         return 0.0
     return min(1.0, max(0.0, tokens / max_tokens))

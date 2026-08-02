@@ -47,8 +47,10 @@ class DqnSearchSession:
         self.oracle_distance_reward_enabled = oracle_distance_reward_enabled
         self.oracle_distance_scale = oracle_distance_scale
         self._oracle_distance: int | None = None
+        self._oracle_optimal: int | None = None
+        self._previous_beam_width: int | None = None
         self._value_cache: dict = {}
-        self.last_values = None
+        self.last_values: list[float] | None = None
         self.last_joint_rank: bool | None = None
         self._cumulative_tokens = 0.0
         self._cumulative_latency = 0.0
@@ -95,6 +97,9 @@ class DqnSearchSession:
 
         decision_state = None
         if success is None:
+            if oracle_enabled and self._oracle_optimal is None:
+                from federated_mcts.core.dqn.oracle_distance import min_remaining_distance
+                self._oracle_optimal = min_remaining_distance(x, [""])
             decision_state = self.controller.decide(
                 candidates=unique,
                 states=states,
@@ -106,6 +111,9 @@ class DqnSearchSession:
                 latency_consumed=self._cumulative_latency,
                 latency_budget=self.latency_budget,
                 previous_joint_rank=self.last_joint_rank,
+                task_optimal_length=self._oracle_optimal if oracle_enabled else None,
+                current_remaining_distance=self._oracle_distance,
+                previous_beam_width=self._previous_beam_width,
             )
             self._episode.close(next_state=decision_state.state, done=False, success=False)
             self._episode.open(decision_state.state, decision_state.action, self._oracle_distance if oracle_enabled else None)
@@ -120,6 +128,11 @@ class DqnSearchSession:
             stopped = True
             eval_seconds = 0.0
         else:
+            if decision_state is None:
+                raise RuntimeError("DQN decision state is required for evaluation")
+            eval_budget = {2: 2, 3: 4, 4: 6}.get(decision_state.beam, len(unique))
+            if eval_budget < len(unique):
+                unique = unique[:eval_budget]
             ranking_start = time.time()
             values = evaluate_ranked_candidates(
                 args,
@@ -146,6 +159,7 @@ class DqnSearchSession:
         if oracle_enabled and self._episode.pending is not None:
             self._episode.pending["distance_after"] = selected_distance(x, select_new_ys, stopped)
             self._oracle_distance = self._episode.pending["distance_after"]
+            self._previous_beam_width = len(select_new_ys)
         if stopped:
             self._episode.close(next_state=None, done=True, success=True)
         self.last_values = values

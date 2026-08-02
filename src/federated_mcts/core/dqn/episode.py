@@ -67,7 +67,12 @@ class DqnEpisode:
                 "correctness_reward": components["correctness"],
                 "token_penalty": components["token_penalty"],
                 "latency_penalty": components["latency_penalty"],
-                "reward_components": {key: components[key] for key in ("correctness", "distance", "token_penalty", "latency_penalty")},
+                 "reward_components": {
+                     "correctness": components["correctness"],
+                     "distance": components["distance"],
+                     "token_penalty": components["token_penalty"],
+                     "latency_penalty": components["latency_penalty"],
+                 },
             })
         self.all_transitions.append(transition)
         self.pending_transitions.append(transition)
@@ -103,6 +108,11 @@ class DqnEpisode:
             final["correctness_reward"] = reward["correctness"]
             final["token_penalty"] = reward["token_penalty"]
             final["latency_penalty"] = reward["latency_penalty"]
-            final["reward_components"] = {key: reward[key] for key in ("correctness", "distance", "token_penalty", "latency_penalty")}
+            final["reward_components"] = {
+                "correctness": reward["correctness"],
+                "distance": reward["distance"],
+                "token_penalty": reward["token_penalty"],
+                "latency_penalty": reward["latency_penalty"],
+            }
         if self.recorder is not None:
             self.recorder.replace_last(final)
