@@ -6,10 +6,10 @@ class Task:
         pass
 
     def __len__(self) -> int:
-        pass
+        raise NotImplementedError
 
     def get_input(self, idx: int) -> str:
-        pass
+        raise NotImplementedError
 
-    def test_output(self, idx: int, output: str):
-        pass
+    def test_output(self, idx: int, output: str) -> int:
+        raise NotImplementedError

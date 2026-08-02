@@ -13,6 +13,18 @@ State representation: a frozen set of predicate tuples drawn from
 from __future__ import annotations
 
 import re
+from typing import TypedDict, TypeAlias
+
+Predicate: TypeAlias = tuple[str, ...]
+State: TypeAlias = frozenset[Predicate]
+
+
+class ParsedProblem(TypedDict):
+    id: str
+    blocks: frozenset[str]
+    init: State
+    goal: State
+    max_steps: int
 
 _PICK_RE = re.compile(r"^(?:pick[-\s]?up|pickup)\s+([a-z]+)$")
 _PUT_RE = re.compile(r"^(?:put[-\s]?down|putdown)\s+([a-z]+)$")
@@ -22,9 +34,15 @@ _UNSTACK_RE = re.compile(
 )
 
 
-def parse_x(x: str) -> dict:
+def parse_x(x: str) -> ParsedProblem:
     """Parse the canonical problem text produced by ``format_x``."""
-    result = {}
+    result: ParsedProblem = {
+        "id": "",
+        "blocks": frozenset(),
+        "init": frozenset(),
+        "goal": frozenset(),
+        "max_steps": 0,
+    }
     lines = [line.strip() for line in x.splitlines()]
     i = 0
     while i < len(lines):
@@ -55,7 +73,7 @@ def parse_x(x: str) -> dict:
     return result
 
 
-def format_x(record: dict) -> str:
+def format_x(record: ParsedProblem) -> str:
     """Serialize a normalized data record into the canonical problem text."""
     lines = [
         "Instance: %s" % record["id"],
@@ -71,12 +89,12 @@ def format_x(record: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _parse_pred(text: str) -> tuple:
+def _parse_pred(text: str) -> Predicate:
     parts = text.split()
     return (parts[0],) + tuple(parts[1:])
 
 
-def parse_action_line(line: str, blocks: frozenset) -> tuple | None:
+def parse_action_line(line: str, blocks: frozenset[str]) -> tuple[str, tuple[str, ...]] | None:
     """Parse a single action line into ``(canonical_name, args)`` or None.
 
     Accepts the canonical grammar ``pick-up X``, ``put-down X``,
@@ -87,6 +105,7 @@ def parse_action_line(line: str, blocks: frozenset) -> tuple | None:
     if not text:
         return None
     match = _PICK_RE.match(text)
+    args: tuple[str, ...]
     if match is not None:
         name, args = "pick-up", (match.group(1),)
     else:
@@ -108,7 +127,7 @@ def parse_action_line(line: str, blocks: frozenset) -> tuple | None:
     return (name, args)
 
 
-def format_action(action: tuple) -> str:
+def format_action(action: tuple[str, tuple[str, ...]]) -> str:
     """Render a parsed action back to its canonical single-line form."""
     name, args = action
     if name in ("pick-up", "put-down"):
@@ -125,11 +144,11 @@ def action_count(y: str) -> int:
     return len(action_lines(y))
 
 
-def initial_state(parsed: dict) -> frozenset:
+def initial_state(parsed: ParsedProblem) -> State:
     return parsed["init"]
 
 
-def step_state(state: frozenset | None, action: tuple) -> frozenset | None:
+def step_state(state: State | None, action: tuple[str, tuple[str, ...]]) -> State | None:
     """Apply one action to a state, or None if its preconditions are unmet."""
     if state is None:
         return None
@@ -178,14 +197,14 @@ def step_state(state: frozenset | None, action: tuple) -> frozenset | None:
     return None
 
 
-def replay_state(parsed: dict, y: str) -> frozenset | None:
+def replay_state(parsed: ParsedProblem, y: str) -> State | None:
     """Replay every action line from the initial state.
 
     Every non-empty trajectory line must parse as exactly one known action; a
     malformed, commentary or unknown line invalidates the whole trajectory
     (returns None), as does a parsed action whose preconditions are unmet.
     """
-    state = parsed["init"]
+    state: State | None = parsed["init"]
     for line in action_lines(y):
         action = parse_action_line(line, parsed["blocks"])
         if action is None:
@@ -196,13 +215,13 @@ def replay_state(parsed: dict, y: str) -> frozenset | None:
     return state
 
 
-def is_goal_satisfied(parsed: dict, state: frozenset | None) -> bool:
+def is_goal_satisfied(parsed: ParsedProblem, state: State | None) -> bool:
     if state is None:
         return False
     return parsed["goal"] <= state
 
 
-def canonical_key(parsed: dict, state: frozenset | None) -> tuple:
+def canonical_key(parsed: ParsedProblem, state: State | None) -> tuple[str, frozenset[Predicate] | None]:
     """Instance identity plus the complete replayed symbolic state."""
     return (parsed["id"], None if state is None else frozenset(state))
 

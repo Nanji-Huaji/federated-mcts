@@ -200,13 +200,15 @@ def summarize_oracle_tasks(
         and m["best_successful"]["optimality_ratio"] is not None
     ]
     finite_ratio_task_count = len(finite_best)
+    finite_ratios = [b["optimality_ratio"] for b in finite_best if b["optimality_ratio"] is not None]
+    finite_excess = [b["excess_steps"] for b in finite_best if b["excess_steps"] is not None]
     mean_optimality_ratio = (
-        sum(b["optimality_ratio"] for b in finite_best) / finite_ratio_task_count
+        sum(finite_ratios) / len(finite_ratios)
         if finite_best
         else 0.0
     )
     mean_excess_steps = (
-        sum(b["excess_steps"] for b in finite_best) / finite_ratio_task_count
+        sum(finite_excess) / len(finite_excess)
         if finite_best
         else 0.0
     )

@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from federated_mcts.tasks.blocksworld_engine import (
+    ParsedProblem,
     action_lines,
     is_goal_satisfied,
     parse_action_line,
@@ -67,7 +68,7 @@ class TrajectoryMetrics:
     optimality_ratio: float | None
 
 
-def legal_actions(parsed: dict, state: frozenset | None) -> tuple[Action, ...]:
+def legal_actions(parsed: ParsedProblem, state: frozenset[tuple[str, ...]] | None) -> tuple[Action, ...]:
     """Deterministic, duplicate-free actions legal in ``state``.
 
     Candidate families in pick-up, put-down, stack, unstack order, blocks and
@@ -76,25 +77,25 @@ def legal_actions(parsed: dict, state: frozenset | None) -> tuple[Action, ...]:
     if state is None:
         return ()
     blocks = sorted(parsed["blocks"])
-    candidates: list[Action] = [
-        ("pick-up", (block,)) for block in blocks
-    ] + [
-        ("put-down", (block,)) for block in blocks
-    ] + [
+    candidates: list[Action] = []
+    candidates.extend(("pick-up", (block,)) for block in blocks)
+    candidates.extend(("put-down", (block,)) for block in blocks)
+    candidates.extend(
         ("stack", (block, target))
         for block in blocks
         for target in blocks
         if block != target
-    ] + [
+    )
+    candidates.extend(
         ("unstack", (block, below))
         for block in blocks
         for below in blocks
         if block != below
-    ]
+    )
     return tuple(c for c in candidates if step_state(state, c) is not None)
 
 
-def shortest_plan(parsed: dict, max_depth: int | None = None) -> ShortestPlanResult:
+def shortest_plan(parsed: ParsedProblem, max_depth: int | None = None) -> ShortestPlanResult:
     """Exact BFS shortest plan; reports solved / unreachable / cutoff.
 
     Visited-on-enqueue; ``explored`` counts the distinct states actually
@@ -106,7 +107,7 @@ def shortest_plan(parsed: dict, max_depth: int | None = None) -> ShortestPlanRes
     """
     start = parsed["init"]
     visited = {start}
-    queue = deque([(start, (), 0)])
+    queue: deque[tuple[frozenset[tuple[str, ...]], tuple[Action, ...], int]] = deque([(start, (), 0)])
     explored = 0
     reached_bound = False
     while queue:
@@ -132,7 +133,7 @@ def shortest_plan(parsed: dict, max_depth: int | None = None) -> ShortestPlanRes
 
 
 def evaluate_trajectory(
-    parsed: dict,
+    parsed: ParsedProblem,
     trajectory: str,
     optimal: int | None = None,
 ) -> TrajectoryMetrics:
