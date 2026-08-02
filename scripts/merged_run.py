@@ -42,6 +42,8 @@ def file_name_generater(args):
             "dqn": "_policy_dqn",
         }.get(getattr(args, "search_policy", "baseline"), "")
         file = f"./logs/{args.task}/{args.solve_method}/{args.remotebackend}/{args.temperature}_{args.method_generate}_n_generate_sample_{args.n_generate_sample}_{args.method_evaluate}_n_evaluate_sample_{args.n_evaluate_sample}_method_select_{args.method_select}_n_select_sample_{args.n_select_sample}{policy_suffix}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
+    if getattr(args, "game24_exact_prune", False):
+        file += "_exactprune_True"
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
     print(f"File name: {file}.json")
     return file
@@ -66,7 +68,6 @@ def run(args, solve_function):
 
     task_indices = range(args.task_start_index, args.task_end_index)
     if getattr(args, "task_split", None):
-        import json
         with open(f"data/splits/{args.task}.json") as f:
             split = json.load(f)[args.task_split]
         task_indices = list(split)
@@ -79,7 +80,7 @@ def run(args, solve_function):
         print(f"Task {i}")
         task = get_task(args.task)
 
-        ys, info = solve_function(task, i, assign_strategy=args.assign_strategy)
+        ys, info = solve_function(task, i, assign_strategy=args.assign_strategy, solve_client="local_client" if getattr(args, "search_policy", "baseline") == "dqn" else "remote_client")
 
         # log
         print("ys ", ys)
@@ -210,7 +211,7 @@ def parse_args():
     args.add_argument("--beam_confidence_margin", type=float, default=0.8)
     args.add_argument("--dqn_seed", type=int, default=0, help="seed for the DQN controller")
     args.add_argument("--dqn_epsilon", type=float, default=1.0, help="exploration rate; clamped to >= 0.5 while collecting")
-    args.add_argument("--dqn_state_dim", type=int, default=12)
+    args.add_argument("--dqn_state_dim", type=int, default=16)
     args.add_argument("--dqn_capacity", type=int, default=10000)
     args.add_argument("--dqn_token_budget", type=float, default=5000.0)
     args.add_argument("--dqn_latency_budget", type=float, default=60.0)
@@ -250,6 +251,10 @@ def parse_args():
                         choices=["round_robin", "difficulty", "bandit"],
                         help="Task assignment strategy (default: round_robin)")
     args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
+    args.add_argument(
+        "--game24_exact_prune", action="store_true", default=False,
+        help="Game24 only: prune candidates whose remaining numbers cannot reach exactly 24 (oracle-aided ablation)",
+    )
     args.add_argument("--max_cost_usd", type=float, default=None, help="stop after reaching this estimated API cost")
 
     args = args.parse_args()

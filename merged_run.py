@@ -36,6 +36,8 @@ def file_name_generater(args):
         file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
     else:
         file = f"./logs/{args.task}/{args.solve_method}/{args.remotebackend}/{args.temperature}_{args.method_generate}_n_generate_sample_{args.n_generate_sample}_{args.method_evaluate}_n_evaluate_sample_{args.n_evaluate_sample}_method_select_{args.method_select}_n_select_sample_{args.n_select_sample}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
+    if getattr(args, "game24_exact_prune", False):
+        file += "_exactprune_True"
     os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
     print(f"File name: {file}.json")
     return file
@@ -205,6 +207,10 @@ def parse_args():
     args.add_argument("--inference_idx", type=int, default=0, help="Do multiple experiments")
     args.add_argument("--last_lm", action="store_true", help="Use the large model for the last step")
 
+    args.add_argument(
+        "--game24_exact_prune", action="store_true", default=False,
+        help="Game24 only: prune candidates whose remaining numbers cannot reach exactly 24 (oracle-aided ablation)",
+    )
     args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
 
     args = args.parse_args()
