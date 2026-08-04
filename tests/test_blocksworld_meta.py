@@ -57,11 +57,12 @@ class TestRegistry(unittest.TestCase):
         self.assertIsInstance(tot_get_task("blocksworld"), BlocksworldTask)
 
     def test_cli_choices_include_blocksworld(self):
-        for runner in ("merged_run.py", os.path.join("scripts", "merged_run.py")):
-            path = os.path.join(REPO_ROOT, runner)
-            with open(path) as fh:
-                text = fh.read()
-            self.assertIn('"blocksworld"', text, runner)
+        from federated_mcts.evaluation.game24_runner_args import parse_args
+
+        with patch.object(sys, "argv", ["merged_run.py", "--task", "blocksworld"]):
+            args = parse_args()
+
+        self.assertEqual(args.task, "blocksworld")
 
 
 class TestCheckedGenerationEmptyFallback(unittest.TestCase):
