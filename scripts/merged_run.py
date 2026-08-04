@@ -1,6 +1,6 @@
 import os
 import json
-import argparse
+import sys
 
 from federated_mcts.env_loader import load_dotenv
 load_dotenv()
@@ -11,94 +11,204 @@ from federated_mcts.tasks import get_task
 from federated_mcts.models import get_model_usage_summary
 from federated_mcts.utils.cost_limit import cost_exceeded, total_cost_usd
 
-import openai
-
-
 from federated_mcts.federation import FederatedSolver
 
 from federated_mcts.evaluation.blocksworld_metrics import merge_oracle_metrics, task_oracle_metrics
 
-
-
-
+# ── Todo 3: experiment runner integration (manifest, budget, auth) ─
+from federated_mcts.evaluation.game24_runner_setup import (
+    build_setup_from_args,
+)
+from federated_mcts.evaluation.game24_runner import (
+    build_manifest,
+    build_preflight,
+    setup_budget_ledger,
+    consume_authorization,
+    check_budget_caps,
+    enrich_result,
+    compute_task_raw_unit_cost,
+)
+from federated_mcts.evaluation.game24_runner_orch import (
+    run_preflight_and_dry_run,
+    setup_mock_solver,
+)
+from federated_mcts.evaluation.game24_b0_gate import (
+    enforce_b0_gate,
+)
+from federated_mcts.evaluation.game24_runner_persistence import (
+    compute_file_prefix,
+    setup_journal_and_resume,
+    persist_task,
+    restore_completed_tasks,
+    make_task_recorder,
+)
+from federated_mcts.evaluation.game24_preflight import persist_projection
+from federated_mcts.evaluation.game24_runner_args import parse_args
 
 
 def file_name_generater(args):
     if hasattr(args, "model_config"):
-        with open(args.model_config, "r") as f:
+        with open(args.model_config) as f:
             model_config = json.load(f)
-        args.localbackend = list(
-            filter(lambda model_config_dict: model_config_dict["client_name"] == "local_client", model_config)
-        )[0]["model"]
-        args.remotebackend = list(
-            filter(lambda model_config_dict: model_config_dict["client_name"] == "remote_client", model_config)
-        )[0]["model"]
-        print(f"Local backend: {args.localbackend}, Remote backend: {args.remotebackend}")
-    if args.naive_run:
-        file = f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/{args.temperature}_naive_{args.prompt_sample}_sample_{args.n_generate_sample}_start{args.task_start_index}_end{args.task_end_index}_usingLLM"
+        args.localbackend = next(
+            entry["model"] for entry in model_config
+            if entry.get("client_name") == "local_client"
+        )
+        args.remotebackend = next(
+            entry["model"] for entry in model_config
+            if entry.get("client_name") == "remote_client"
+        )
+    if getattr(args, "naive_run", False):
+        file_name = (
+            f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/"
+            f"{args.temperature}_naive_{args.prompt_sample}_sample_"
+            f"{args.n_generate_sample}_start{args.task_start_index}"
+            f"_end{args.task_end_index}_usingLLM"
+        )
     else:
         policy_suffix = {
             "diverse": "_policy_diverse",
             "dqn": "_policy_dqn",
         }.get(getattr(args, "search_policy", "baseline"), "")
-        file = f"./logs/{args.task}/{args.solve_method}/{args.remotebackend}/{args.temperature}_{args.method_generate}_n_generate_sample_{args.n_generate_sample}_{args.method_evaluate}_n_evaluate_sample_{args.n_evaluate_sample}_method_select_{args.method_select}_n_select_sample_{args.n_select_sample}{policy_suffix}_start{args.task_start_index}_end{args.task_end_index}_smg_{args.slm_generate}_sme_{args.slm_eval}_check_{args.check_format}_rule_{args.eval_rule}_warm_{args.warm_start}_last_{args.last_lm}_idx_{args.inference_idx}"
+        file_name = (
+            f"./logs/{args.task}/{args.solve_method}/{args.remotebackend}/"
+            f"{args.temperature}_{args.method_generate}_n_generate_sample_"
+            f"{args.n_generate_sample}_{args.method_evaluate}_n_evaluate_sample_"
+            f"{args.n_evaluate_sample}_method_select_{args.method_select}"
+            f"_n_select_sample_{args.n_select_sample}{policy_suffix}"
+            f"_start{args.task_start_index}_end{args.task_end_index}"
+            f"_smg_{args.slm_generate}_sme_{args.slm_eval}"
+            f"_check_{args.check_format}_rule_{args.eval_rule}"
+            f"_warm_{args.warm_start}_last_{args.last_lm}"
+            f"_idx_{args.inference_idx}"
+        )
     if getattr(args, "game24_exact_prune", False):
-        file += "_exactprune_True"
-    os.makedirs(os.path.dirname(file + ".json"), exist_ok=True)
-    print(f"File name: {file}.json")
-    return file
+        file_name += "_exactprune_True"
+    return file_name
 
 
-def run(args, solve_function):
-    file_name = file_name_generater(args)
+def run(args, solve_method):
+    # ── Compute file name (NO directory creation) ────────────────────
+    file_name = compute_file_prefix(args)
 
-    solver = FederatedSolver(args)
-    function_map = {
+    # ── Todo 3: setup manifest, budget, seed ───────────────────────
+    task_split = getattr(args, "task_split", None)
+    pilot_ids = getattr(args, "pilot_ids", None)
+    split_path = f"data/splits/{args.task}.json" if (task_split or pilot_ids) else ""
+    setup = build_setup_from_args(args, split_path, file_name)
+    manifest = build_manifest(setup)
+
+    # ── Preflight gate check + dry run ──────────────────────────────
+    projection = build_preflight(setup)
+
+    # When B0 measured evidence is requested, defer the static full-validation
+    # gate to the B0 measured-projection gate below.  The static projection is
+    # still computed and printed for diagnostics; only the full-200 gate is skipped.
+    has_b0_evidence = bool(
+        getattr(args, "b0_manifest", None)
+        or getattr(args, "b0_performance", None)
+        or getattr(args, "b0_journal", None)
+        or getattr(args, "b0_budget", None)
+    )
+    if not run_preflight_and_dry_run(
+        setup, manifest, projection, skip_full_val_gate=has_b0_evidence,
+    ):
+        return  # dry run — no side effects performed
+
+    # ── B0 measured-evidence projection gate (before side effects) ───
+    if not enforce_b0_gate(args, manifest=manifest):
+        return  # b0_dry_run — no side effects performed
+
+    # ── Todo 7: persistence and resume ───────────────────────────────
+    resume = bool(getattr(args, "resume", False))
+    journal, skip_ids = setup_journal_and_resume(
+        file_name=file_name, manifest=manifest,
+        resume=resume, task_ids=setup.task_ids,
+    )
+    is_game24 = setup.task == "game24"
+
+    # ── Create output directories (only after resume validation) ──────
+    os.makedirs(os.path.dirname(file_name + ".json"), exist_ok=True)
+
+    manifest_path = file_name + "_manifest.json"
+    with open(manifest_path, "w") as f:
+        f.write(manifest.to_json())
+    print(f"Manifest saved to {manifest_path}")
+    print(f"  decision_policy_fingerprint: {manifest.decision_policy_fingerprint}")
+    print(f"  run_fingerprint: {manifest.run_fingerprint}")
+
+    # ── Persist preflight (non-dry real/mocked runs only) ────────────
+    if projection is not None:
+        persist_projection(projection, file_name + "_preflight.json")
+
+    budget_ledger = setup_budget_ledger(setup)
+
+    # ── Todo 3 V2: auth BEFORE solver ─────────────────────────────
+    ok, err = consume_authorization(manifest, setup)
+    if not ok:
+        print(f"FATAL: {err}", file=sys.stderr)
+        sys.exit(1)
+
+    solver = setup_mock_solver(args, setup, solver_cls=FederatedSolver)
+    fn_map = {
         "naive": solver.naive_solve,
         "tot": solver.solve,
         "speculative_solve": solver.speculative_solve,
         "federated_solve": solver.federated_solve,
     }
-    solve_function = function_map[solve_function]
+    solve_fn = fn_map[solve_method]
 
     logs, cnt_avg, cnt_any = [], 0, 0
-    stop_reason = None
+    stop_reason: str | None = None
     token_consumption = {}
     oracle_task_metrics = []
+    per_task_metrics: list = []
+    prev_usage_snapshot: dict = {}
 
-    task_indices = range(args.task_start_index, args.task_end_index)
-    if getattr(args, "task_split", None):
-        with open(f"data/splits/{args.task}.json") as f:
-            split = json.load(f)[args.task_split]
-        task_indices = list(split)
-        print("Using %s split: %d tasks, indices %d..%d" % (args.task_split, len(task_indices), task_indices[0], task_indices[-1]))
-    for i in task_indices:
-        if cost_exceeded(get_model_usage_summary(), args.max_cost_usd):
-            stop_reason = "max_cost_usd"
+    # ── Resume: restore completed task records into logs/counters ─
+    if resume and skip_ids:
+        ca, cy = restore_completed_tasks(
+            journal, skip_ids, logs=logs,
+            per_task_metrics=per_task_metrics)
+        cnt_avg += ca; cnt_any += cy
+
+    for i in setup.task_ids:
+        if i in skip_ids:
+            print(f"Task {i}: skipping (already completed in journal)")
+            continue
+
+        # ── Todo 3: per-task cap checks ────────────────────────────
+        budget_ledger.mark_task_started()
+        can_cont, cap_reason = check_budget_caps(
+            budget_ledger, getattr(args, "max_cost_usd", None),
+        )
+        if not can_cont:
+            stop_reason = cap_reason
+            print(f"Stop: {cap_reason}")
             break
-        ys = [""]
+
         print(f"Task {i}")
         task = get_task(args.task)
+        task_recorder = make_task_recorder(is_game24, i,
+            task.get_input(i), setup.decision_policy,
+            setup.oracle_audit)
 
-        ys, info = solve_function(task, i, assign_strategy=args.assign_strategy, solve_client="local_client" if getattr(args, "search_policy", "baseline") == "dqn" else "remote_client")
-
-        # log
-        print("ys ", ys)
+        solve_client = "local_client" if getattr(args, "search_policy", "baseline") == "dqn" else "remote_client"
+        ys, info = solve_fn(task, i, assign_strategy=args.assign_strategy,
+                            solve_client=solve_client, task_recorder=task_recorder)
         infos, output_list = [], []
         for y in ys:
-            r, new_output = task.test_output_modify(i, y)  # type: ignore
-            if new_output not in output_list:  # Avoid duplication of outputs
+            r, new_output = task.test_output_modify(i, y)
+            if new_output not in output_list:
                 output_list.append(new_output)
             else:
-                r = {"r": 0}  # Do not count twice
+                r = {"r": 0}
             infos.append(r)
 
-        # Re-attribute the terminal DQN reward with the exact task reward (the solver only sees the success-state heuristic).
         if getattr(args, "search_policy", "baseline") == "dqn":
             session = getattr(solver, "dqn_session", None)
             if session is not None:
-                accs = [info["r"] for info in infos]
-                session.finalize(any(accs))
+                session.finalize(any(ri["r"] for ri in infos))
 
         oracle = task_oracle_metrics(task, i, ys)
         if oracle is not None:
@@ -106,25 +216,51 @@ def run(args, solve_function):
             oracle_task_metrics.append(oracle)
 
         token_consumption = get_model_usage_summary()
-        time_consumption = solver.latency_dict
-        info.update(
-            {
-                "idx": i,
-                "ys": ys,
-                "infos": infos,
-                "usage_so_far": token_consumption,
-                "time_consumption": time_consumption,
-            }
-        )
-
+        info.update({
+            "idx": i, "ys": ys, "infos": infos,
+            "usage_so_far": token_consumption,
+            "time_consumption": solver.latency_dict,
+        })
         logs.append(info)
+
+        # ── Todo 7: atomic persistence after each task ────────────
+        if task_recorder is not None:
+            try:
+                task_metrics = task_recorder.to_task_metrics()
+                per_task_metrics.append(task_metrics)
+                persist_task(journal, i, ys, info,
+                             json.dumps(task_metrics),
+                             task_recorder.total_elapsed_ms)
+            except Exception as e:
+                print(f"Warning: persistence write failed for task {i}: {e}")
+
+        # ── Todo 7: per-task usage delta ──────────────────────────
+        current = get_model_usage_summary()
+        delta: dict = {}
+        for m, stats in current.items():
+            p = prev_usage_snapshot.get(m, {})
+            for k in ("completion_tokens", "prompt_tokens",
+                      "total_tokens", "total_calls"):
+                cv, pv = int(stats.get(k, 0)), int(p.get(k, 0))
+                if cv != pv:
+                    delta[f"{m}.{k}"] = cv - pv
+        info["usage_delta"] = delta
+        # ── Raw-unit spending from usage delta ────────────────
+        task_cost_raw = compute_task_raw_unit_cost(prev_usage_snapshot, current)
+        prev_usage_snapshot = current
+
+        if task_cost_raw > 0.0:
+            if not budget_ledger.spend(task_cost_raw):
+                print(f"FATAL: budget exceeded on task {i}. "
+                      f"Remaining: {budget_ledger.remaining:.6f}")
+                stop_reason = "max_raw_unit_limit"
+                break
 
         with open(file_name + ".json", "w") as f:
             json.dump(logs, f, indent=4)
 
-        # log main metric
-        accs = [info["r"] for info in infos]
-        cnt_avg += sum(accs)  # / len(accs) #jinyu: counting the sum
+        accs = [ri["r"] for ri in infos]
+        cnt_avg += sum(accs)
         cnt_any += any(accs)
         print(i, "sum(accs)", sum(accs), "cnt_avg", cnt_avg, "cnt_any", cnt_any, "\n")
         if cost_exceeded(token_consumption, args.max_cost_usd):
@@ -136,129 +272,27 @@ def run(args, solve_function):
     accuracy = cnt_any / n if n else 0.0
     print("The average sum is ", avg_sum, ". The accuracy is: ", accuracy)
     print("Token consumption: ", token_consumption)
-    res_json = {
-        "avg_sum": avg_sum,
-        "acc": accuracy,
-        "sm": args.localbackend,
-        "llm": args.remotebackend,
+
+    res_json: dict = {
+        "avg_sum": avg_sum, "acc": accuracy,
+        "sm": args.localbackend, "llm": args.remotebackend,
     }
     res_json.update(token_consumption)
     res_json["estimated_cost_usd"] = total_cost_usd(token_consumption)
     if stop_reason is not None:
         res_json["stop_reason"] = stop_reason
+    enrich_result(res_json, manifest, budget_ledger, stop_reason, projection=projection)
     merge_oracle_metrics(oracle_task_metrics, res_json)
+
+    # ── Todo 7: experiment aggregation ────────────────────────────
+    if per_task_metrics:
+        from federated_mcts.evaluation.game24_metrics import summarize_experiment_metrics
+        res_json["experiment_metrics"] = summarize_experiment_metrics(per_task_metrics)
+        res_json["task_count"] = len(per_task_metrics)
 
     with open(file_name + "_performance.json", "w") as f:
         json.dump(res_json, f, indent=4)
         print(f"Performance results saved to {file_name}_performance.json")
-
-
-def parse_args():
-    args = argparse.ArgumentParser()
-    args.add_argument(
-        "--localbackend",
-        type=str,
-        choices=[
-            "gpt-4",
-            "gpt-3.5-turbo",
-            "gpt-4o",
-            "gpt-4o-mini",
-            "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
-            "bartowski/Phi-3-medium-128k-instruct-GGUF",
-            "meta-llama-3.1-8b-instruct@q4_k_m",
-            "Qwen/Qwen2.5-32B-Instruct-GGUF",
-            "phi-3.1-mini-128k-instruct",
-        ],
-        default="bartowski/Phi-3-medium-128k-instruct-GGUF",
-    )
-    args.add_argument(
-        "--remotebackend",
-        type=str,
-        choices=[
-            "gpt-4",
-            "gpt-3.5-turbo",
-            "gpt-4o",
-            "gpt-4o-mini",
-            "lmstudio-community/Meta-Llama-3.1-8B-Instruct-GGUF",
-            "bartowski/Phi-3-medium-128k-instruct-GGUF",
-            "meta-llama-3.1-8b-instruct@q4_k_m",
-            "Qwen/Qwen2.5-32B-Instruct-GGUF",
-            "qwen2.5-32b-instruct",
-        ],
-        default="qwen2.5-32b-instruct",
-    )
-    args.add_argument("--temperature", type=float, default=0.9)
-    args.add_argument("--task", type=str, required=True, choices=["game24", "text", "crosswords", "gsm8k", "wikilogic", "hyblogic", "blocksworld"])
-    args.add_argument("--task_split", type=str, default=None, choices=["train", "val", "test"],
-                        help="use predefined split from data/splits/{task}.json (overrides --task_start/--task_end)")
-    args.add_argument("--task_start_index", type=int, default=900)
-    args.add_argument("--task_end_index", type=int, default=1000)
-    args.add_argument("--naive_run", action="store_true")
-    args.add_argument(
-        "--prompt_sample", type=str, choices=["standard", "cot"]
-    )  # only used when method_generate = sample, or naive_run
-    args.add_argument("--method_generate", type=str, choices=["sample", "propose"])
-    args.add_argument("--method_evaluate", type=str, choices=["value", "vote"])
-    args.add_argument("--method_select", type=str, choices=["sample", "greedy"], default="greedy")
-    args.add_argument("--n_generate_sample", type=int, default=1)  # only thing needed if naive_run
-    args.add_argument("--n_evaluate_sample", type=int, default=1)
-    args.add_argument("--n_select_sample", type=int, default=1)
-    args.add_argument("--search_policy", choices=["baseline", "diverse", "dqn"], default="baseline")
-    args.add_argument("--diverse_joint_rank", action=argparse.BooleanOptionalAction, default=True)
-    args.add_argument("--diversity_weight", type=float, default=0.35)
-    args.add_argument("--beam_expand", type=int, default=2)
-    args.add_argument("--beam_uncertainty_margin", type=float, default=0.1)
-    args.add_argument("--beam_confidence_margin", type=float, default=0.8)
-    args.add_argument("--dqn_seed", type=int, default=0, help="seed for the DQN controller")
-    args.add_argument("--dqn_epsilon", type=float, default=1.0, help="exploration rate; clamped to >= 0.5 while collecting")
-    args.add_argument("--dqn_state_dim", type=int, default=16)
-    args.add_argument("--dqn_capacity", type=int, default=10000)
-    args.add_argument("--dqn_token_budget", type=float, default=5000.0)
-    args.add_argument("--dqn_latency_budget", type=float, default=60.0)
-    args.add_argument("--dqn_oracle_distance_reward", action=argparse.BooleanOptionalAction, default=False)
-    args.add_argument("--dqn_oracle_distance_scale", type=float, default=0.25)
-    args.add_argument(
-        "--dqn_checkpoint", type=str, default=None,
-        help="path to a trained DQN checkpoint; missing file starts collection-only mode",
-    )
-    args.add_argument(
-        "--dqn_jsonl", type=str, default=None,
-        help="path to append collected DQN transitions as JSONL",
-    )
-    args.add_argument(
-        "--solve_method", type=str, choices=["naive", "tot", "speculative_solve", "federated_solve"], default="tot"
-    )
-    args.add_argument("--slm_generate", action="store_true", help="use small lm for generation")
-    args.add_argument("--slm_eval", action="store_true", help="use small lm for evaluation")
-    args.add_argument(
-        "--check_format",
-        action="store_true",
-        help="check the format and correctness of the generated contents",
-    )
-    args.add_argument("--eval_rule", action="store_true", help="use rules for evaluation")
-    args.add_argument(
-        "--warm_start",
-        action="store_true",
-        help="step 0 uses large model for generation",
-    )
-    args.add_argument(
-        "--model_config", type=str, default="configs/model_config.json", help="Path to the model configuration file"
-    )
-    args.add_argument("--inference_idx", type=int, default=0, help="Do multiple experiments")
-    args.add_argument("--last_lm", action="store_true", help="Use the large model for the last step")
-
-    args.add_argument("--assign_strategy", type=str, default="round_robin",
-                        choices=["round_robin", "difficulty", "bandit"],
-                        help="Task assignment strategy (default: round_robin)")
-    args.add_argument("--filter", action="store_true", help="Enable filtering for specific runs.")
-    args.add_argument(
-        "--game24_exact_prune", action="store_true", default=False,
-        help="Game24 only: prune candidates whose remaining numbers cannot reach exactly 24 (oracle-aided ablation)",
-    )
-    args.add_argument("--max_cost_usd", type=float, default=None, help="stop after reaching this estimated API cost")
-
-    args = args.parse_args()
-    return args
 
 
 if __name__ == "__main__":
@@ -267,5 +301,4 @@ if __name__ == "__main__":
         print("Filtering enabled. Only runs with specific criteria will be executed.")
     else:
         print("No filtering applied. All runs will be executed.")
-
     run(args, args.solve_method)
