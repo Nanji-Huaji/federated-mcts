@@ -3,6 +3,11 @@ from typing import Tuple
 import re
 import math
 
+
+def game24_heuristic_product_check(numbers: list[int]) -> bool:
+    """Return whether a non-terminal state passes the product heuristic."""
+    return len(numbers) <= 1 or math.prod(numbers) >= 24
+
 def check_and_fix_last_line(new_proposal: str, x: str = "") -> Tuple[bool, str]:
     # Get the last two lines 获取最后的2次操作
     lines = new_proposal.strip().split('\n')
@@ -70,7 +75,10 @@ def check_and_fix_last_line(new_proposal: str, x: str = "") -> Tuple[bool, str]:
         if b == 0:
             #print("Division by zero error.")
             return False, new_proposal
-        correct_result = a // b  # Use integer division
+        quotient, remainder = divmod(a, b)
+        if remainder != 0:
+            return False, new_proposal
+        correct_result = quotient
     else:
         return False, new_proposal
 
@@ -95,12 +103,6 @@ def check_and_fix_last_line(new_proposal: str, x: str = "") -> Tuple[bool, str]:
 
     # Sort and form the new left numbers
     new_left_num = sorted(pre_left_list, key=int)
-    int_left_num =list(map(int, pre_left_list))
-    product = math.prod(int_left_num)
-    if(product<24):
-        return False, new_proposal
-
-    
     # Check if last_left_num matches the expected new_left_num
     if ',' in ' '.join(last_left_num) or new_left_num != last_left_num or false_result:
         updated_left_part = ' '.join(new_left_num)
@@ -183,7 +185,10 @@ def check_final_result(last_line: str, pre_line: str = "", x: str = "") -> Tuple
         if b == 0:
             #print("Division by zero error.")
             return False, last_line
-        correct_result = a // b  # Use integer division
+        quotient, remainder = divmod(a, b)
+        if remainder != 0:
+            return False, last_line
+        correct_result = quotient
     else:
         return False, last_line
 
