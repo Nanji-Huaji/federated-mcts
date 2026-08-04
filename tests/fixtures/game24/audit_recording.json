@@ -1,0 +1,61 @@
+{
+  "description": "Deterministic audit recording fixture for Game24 oracle audit replay testing. Contains a canonical post-decision snapshot and expected audit annotations computed offline.",
+  "snapshot": {
+    "schema_version": 1,
+    "task_id": "42",
+    "task_input": "1 2 3 4",
+    "depth": 1,
+    "candidates": [
+      {
+        "idx": 0,
+        "raw_text": "6 * 4 = 24 (left: 24)",
+        "canonical_numbers": ["24"],
+        "evaluator_score": 3.0,
+        "evaluator_mode": "value",
+        "is_selected": false,
+        "is_terminal": true
+      },
+      {
+        "idx": 1,
+        "raw_text": "1 + 1 = 2 (left: 1 1 2)",
+        "canonical_numbers": ["1", "1", "2"],
+        "evaluator_score": 2.5,
+        "evaluator_mode": "vote",
+        "is_selected": true,
+        "is_terminal": false
+      },
+      {
+        "idx": 2,
+        "raw_text": "1 + 2 = 3 (left: 3 3 4)",
+        "canonical_numbers": ["3", "3", "4"],
+        "evaluator_score": 2.0,
+        "evaluator_mode": "value",
+        "is_selected": false,
+        "is_terminal": false
+      }
+    ],
+    "selected_indices": [1],
+    "prompt_call_identity": "sha256:mock-prompt-model-v1",
+    "is_stopping": false,
+    "decision_policy": "local_validity"
+  },
+  "snapshot_sha256": "b63a1444baac9ce95e8ccb151c4700f2b97e4c3f068bba164a6ba3abecf602fd",
+  "expected": {
+    "reachable_indices": [0, 2],
+    "unreachable_indices": [1],
+    "depth_metrics": {
+      "depth": 1,
+      "proposed_count": 3,
+      "reachable_count": 2,
+      "unreachable_count": 1,
+      "selected_count": 1,
+      "selected_reachable_count": 0,
+      "best_reachable_idx": 0,
+      "best_reachable_score": 3.0,
+      "best_selected_idx": 1,
+      "best_selected_score": 2.5,
+      "selection_regret": 0.5,
+      "selected_precision": 0.0
+    }
+  }
+}
