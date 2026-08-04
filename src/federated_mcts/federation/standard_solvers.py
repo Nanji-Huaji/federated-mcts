@@ -9,6 +9,9 @@ from federated_mcts.core.diverse_search import DiverseSearch
 from federated_mcts.core.dqn.factory import build_dqn_session
 from federated_mcts.core.evaluation import get_values, get_votes
 from federated_mcts.core.generation import get_proposals, get_samples
+from federated_mcts.federation._dqn_finish import finish_dqn_session
+from federated_mcts.federation._failed_step import record_failed_step_if_empty
+from federated_mcts.federation._record_decision import record_baseline_decision
 from federated_mcts.federation.time_tracker import TimeTracker
 
 
@@ -57,6 +60,7 @@ class StandardSolversMixin:
 
     def solve(self, task, idx, to_print=True, solve_client="remote_client", **kwargs):
         gpt_fn = self.gpts[solve_client]
+        task_recorder = kwargs.get("task_recorder")
         x = task.get_input(idx)
         ys = [""]
         infos = []
@@ -65,6 +69,10 @@ class StandardSolversMixin:
         dqn_session = build_dqn_session(self.args) if search_policy == "dqn" else None
         self.dqn_session = dqn_session
         for step in range(task.steps):
+            step_started_at = time.time()
+            generation_recorder = (
+                task_recorder.new_generation_recorder()
+                if task_recorder is not None else None)
             candidate_batches: list[list[str]]
             solve_method_generate: Literal["sample", "propose"] = self.args.method_generate
             match solve_method_generate:
@@ -78,7 +86,10 @@ class StandardSolversMixin:
                         for y in ys
                     ]
                 case "propose":
-                    candidate_batches = [get_proposals(self.args, step, task, x, y, client=gpt_fn) for y in ys]
+                    candidate_batches = [get_proposals(
+                        self.args, step, task, x, y, client=gpt_fn,
+                        recorder=generation_recorder, parent_index=parent_index)
+                        for parent_index, y in enumerate(ys)]
                 case unreachable_generate:
                     assert_never(unreachable_generate)
             new_ys = list(itertools.chain.from_iterable(candidate_batches))
@@ -95,7 +106,9 @@ class StandardSolversMixin:
                         "exact_prune_pruned": prune_pruned,
                         "exact_prune_retained": len(new_ys),
                     }
-            if not new_ys:
+            if record_failed_step_if_empty(
+                    new_ys, task_recorder, step, ys, generation_recorder,
+                    step_started_at, task, x):
                 break
             ids = list(range(len(new_ys)))
 
@@ -143,9 +156,16 @@ class StandardSolversMixin:
                 continue
 
             solve_method_evaluate: Literal["vote", "value"] = self.args.method_evaluate
+            vote_recorder = (
+                task_recorder.new_vote_recorder()
+                if task_recorder is not None else None)
             match solve_method_evaluate:
                 case "vote":
-                    values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=gpt_fn)
+                    values = get_votes(
+                        self.args, task, x, new_ys,
+                        self.args.n_evaluate_sample, client=gpt_fn,
+                        recorder=vote_recorder, evaluator_mode="vote",
+                        evaluator_identity=solve_client, depth=step)
                 case "value":
                     values = get_values(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=gpt_fn)
                 case unreachable_evaluate:
@@ -162,6 +182,12 @@ class StandardSolversMixin:
                     assert_never(unreachable_select)
             select_new_ys = [new_ys[select_id] for select_id in select_ids]
 
+            if task_recorder is not None:
+                record_baseline_decision(
+                    task_recorder, step, ys, candidate_batches, new_ys, values,
+                    select_ids, select_new_ys, step_started_at, task, x,
+                    generation_recorder, vote_recorder)
+
             if to_print:
                 sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda item: item[1], reverse=True))
                 print(f"-- new_ys --: {sorted_new_ys}\n-- sol values --: {sorted_values}\n-- choices --: {select_new_ys}\n")
@@ -173,11 +199,7 @@ class StandardSolversMixin:
             })
             ys = select_new_ys
 
-        if dqn_session is not None:
-            dqn_session.finish_episode()
-            remaining = dqn_session.drain_transitions()
-            if remaining and infos:
-                infos[-1].setdefault("dqn_transitions", []).extend(remaining)
+        finish_dqn_session(dqn_session, infos)
 
         if to_print:
             print(ys)

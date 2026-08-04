@@ -11,6 +11,14 @@ import json
 from math import ceil
 from typing import Literal, Tuple, List, Dict, Callable, Union, overload
 import federated_mcts.utils.uncertainty as uncertainty
+from federated_mcts.evaluation.game24_instrumentation import (
+    CandidateProposalRecord,
+    GenerationRecorder,
+)
+from federated_mcts.evaluation.game24_generation_recording import (
+    record_proposal_step,
+    record_unchecked_proposals,
+)
 
 
 def get_proposals_with_check(
@@ -25,6 +33,8 @@ def get_proposals_with_check(
     client=None,
     get_logprobs=False,
     n_generate=4,
+    recorder: GenerationRecorder | None = None,
+    parent_index: int = 0,
 ) -> list[str]:
     # jinyu:
     need_generate = task.pre_generate_check(y) if hasattr(task, "pre_generate_check") else True
@@ -32,6 +42,8 @@ def get_proposals_with_check(
         return [y]
 
     new_proposal_list: list[str] = []
+    raw_completions: list[str] = []
+    proposal_records: list[CandidateProposalRecord] = []
     run_times = 0
     time_constraint, len_constraint = 2, 4
 
@@ -50,18 +62,36 @@ def get_proposals_with_check(
             )
         else:
             completions = client(args, propose_prompt, n=n_generate, stop=None)
+        raw_completions.extend(completions)
         # jinyu: iterate all completions, split each by line
-        for completion in completions:
+        for completion_index, completion in enumerate(completions):
             for pro in completion.split("\n"):
                 if hasattr(task, "process_generate_result") and args.check_format:
                     is_correct, updated_new_proposal = task.process_generate_result(pro, x, y, args.check_format)
                     if is_correct:
                         if updated_new_proposal not in new_proposal_list:
                             new_proposal_list.append(updated_new_proposal)
+                        reason = "accepted"
+                    else:
+                        reason = "malformed_format" if pro else "empty_content"
+                    proposal_records.append(CandidateProposalRecord(
+                        depth=step,
+                        parent_index=parent_index,
+                        retry_ordinal=run_times,
+                        completion_index=completion_index,
+                        raw_line=pro,
+                        is_correct=is_correct,
+                        updated_text=updated_new_proposal,
+                        reason=reason,
+                    ))
         run_times += 1
 
     if run_times >= time_constraint:
         print("runtime ", run_times)
+    if recorder is not None:
+        record_proposal_step(
+            recorder, step, parent_index, y, raw_completions, run_times,
+            proposal_records)
     if len(new_proposal_list) == 0:
         # Optional hook: blocksworld returns [] so invalid branches die; the
         # historical [y] fallback stays for tasks without the hook.
@@ -81,6 +111,8 @@ def get_proposals_without_check(
     model=None,
     client=None,
     get_logprobs=False,
+    recorder: GenerationRecorder | None = None,
+    parent_index: int = 0,
 ) -> list[str]:
     propose_prompt = task.propose_prompt_wrap(x, y)
     if client is None:
@@ -95,7 +127,11 @@ def get_proposals_without_check(
         )[0].split("\n")
     else:
         proposals = client(args, propose_prompt, n=1, stop=None)[0].split("\n")
-    return [y + _ + "\n" for _ in proposals]
+    candidates = [y + proposal + "\n" for proposal in proposals]
+    if recorder is not None:
+        record_unchecked_proposals(
+            recorder, step, parent_index, y, proposals, candidates)
+    return candidates
 
 
 def get_proposals_with_logits(args, step, task, x, y, draft_model):
@@ -114,6 +150,8 @@ def get_proposals(
     client=None,
     get_logprobs=False,
     n_generate=4,
+    recorder: GenerationRecorder | None = None,
+    parent_index: int = 0,
 )-> list[str]:
     if args.check_format:
         return get_proposals_with_check(
@@ -128,6 +166,8 @@ def get_proposals(
             client=client,
             get_logprobs=get_logprobs,
             n_generate=n_generate,
+            recorder=recorder,
+            parent_index=parent_index,
         )
     return get_proposals_without_check(
         args,
@@ -140,6 +180,8 @@ def get_proposals(
         model=model,
         client=client,
         get_logprobs=get_logprobs,
+        recorder=recorder,
+        parent_index=parent_index,
     )
 
 
