@@ -212,6 +212,10 @@ class Game24Task(Task):
         return is_correct, updated_new_proposal
 
     @staticmethod
+    def on_no_valid_candidates(y) -> list[str]:
+        return []
+
+    @staticmethod
     def pre_value_check(y, eval_rule):  # Whether it needs to generate the value
         pattern = [
             "(left: 1 24)",
