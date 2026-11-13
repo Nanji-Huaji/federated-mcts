@@ -21,7 +21,7 @@ echo ""
 
 for strategy in round_robin difficulty bandit; do
     echo "--- Running: $strategy ---"
-    python scripts/merged_run.py $COMMON --assign_strategy "$strategy"
+    PYTHONPATH=src .venv/bin/python -m federated_mcts $COMMON --assign_strategy "$strategy"
     echo ""
 done
 

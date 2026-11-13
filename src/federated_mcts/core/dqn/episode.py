@@ -1,4 +1,13 @@
-"""DQN episode transition lifecycle and recorder coordination."""
+"""DQN episode transition lifecycle and recorder coordination.
+
+A transition is the unit a trainer consumes.  Non-terminal transitions are
+published as soon as their costs are known.  The terminal transition is the
+only one whose correctness component depends on the task's exact verifier, so
+it is held unpublished until :meth:`DqnEpisode.finalize` receives that verdict.
+This keeps the JSONL recorder append-only: a terminal record is written once,
+with the reward the caller will report, instead of being written provisionally
+and rewritten afterwards.
+"""
 
 from __future__ import annotations
 
@@ -27,6 +36,9 @@ class DqnEpisode:
         self.all_transitions: list[dict] = []
         self.pending_transitions: list[dict] = []
         self.last_terminal_costs = (0.0, 0.0)
+        self._terminal_transition: dict | None = None
+        self._terminal_success = False
+        self._terminal_published = False
 
     def open(self, state, action: int, distance_before: int | None) -> None:
         beam, joint_rank = beam_and_joint_rank(action)
@@ -78,7 +90,10 @@ class DqnEpisode:
         self.pending_transitions.append(transition)
         if done:
             self.last_terminal_costs = (pending["tokens"], pending["latency"])
-        if self.recorder is not None:
+            self._terminal_transition = transition
+            self._terminal_success = bool(success)
+            self._terminal_published = False
+        elif self.recorder is not None:
             self.recorder.record(transition)
         return transition
 
@@ -86,33 +101,46 @@ class DqnEpisode:
         transitions, self.pending_transitions = self.pending_transitions, []
         return transitions
 
-    def finish(self, success: bool) -> None:
+    def finish(self, success: bool, *, flush_terminal: bool = True) -> None:
+        """Close a dangling transition and (optionally) publish the terminal one.
+
+        ``flush_terminal=False`` is used by ``finish_task``: the terminal
+        record stays in memory until :meth:`finalize` receives the exact
+        verification verdict, so the recorder never needs a rewrite.
+        """
         if self.pending is not None:
             self.close(next_state=None, done=True, success=success)
+        if flush_terminal:
+            self._publish_terminal(self._terminal_success)
 
     def finalize(self, success: bool) -> None:
-        if not self.all_transitions or not self.all_transitions[-1]["done"]:
+        """Publish the terminal transition once, with the exact task reward."""
+        self._publish_terminal(bool(success))
+
+    def _publish_terminal(self, success: bool) -> None:
+        transition = self._terminal_transition
+        if transition is None or self._terminal_published:
             return
-        final = self.all_transitions[-1]
-        components = final.get("reward_components")
-        before = None if components is None else final["distance_before"]
-        after = None if components is None else final["distance_after"]
+        components = transition.get("reward_components")
+        before = transition.get("distance_before") if components is not None else None
+        after = transition.get("distance_after") if components is not None else None
         tokens, latency = self.last_terminal_costs
         reward = build_reward_components(
             success=success, done=True, distance_before=before, distance_after=after,
             distance_scale=self.distance_scale, tokens=tokens, latency=latency,
             max_tokens=self.max_tokens, budget_seconds=self.budget_seconds,
         )
-        final["reward"] = float(reward["total"])
+        transition["reward"] = float(reward["total"])
         if components is not None:
-            final["correctness_reward"] = reward["correctness"]
-            final["token_penalty"] = reward["token_penalty"]
-            final["latency_penalty"] = reward["latency_penalty"]
-            final["reward_components"] = {
+            transition["correctness_reward"] = reward["correctness"]
+            transition["token_penalty"] = reward["token_penalty"]
+            transition["latency_penalty"] = reward["latency_penalty"]
+            transition["reward_components"] = {
                 "correctness": reward["correctness"],
                 "distance": reward["distance"],
                 "token_penalty": reward["token_penalty"],
                 "latency_penalty": reward["latency_penalty"],
             }
         if self.recorder is not None:
-            self.recorder.replace_last(final)
+            self.recorder.record(transition)
+        self._terminal_published = True

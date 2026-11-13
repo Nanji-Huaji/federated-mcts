@@ -1,42 +1,67 @@
 """Thin runner helpers for journal, resume, task persistence, and file naming.
 
 Extracted from ``scripts/merged_run.py`` so the runner stays ≤250 pure LOC.
+
+Runner integration seam: use ``TaskCommitter`` (also exported here as
+``RunJournal``) from ``game24_persistence`` instead of the legacy
+``persist_task`` + ``ledger.spend`` pair.  ``persist_task`` marks a task
+completed *before* its cost is recorded; the committer writes a pending
+record first, charges with a ``(run, task)`` idempotency key, then settles,
+and ``recover()`` reconciles any crash in between.
 """
 from __future__ import annotations
 
 import json
 import os
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from federated_mcts.evaluation.game24_task_recorder import TaskSessionRecorder
 
 from federated_mcts.evaluation.game24_manifest import Game24Manifest
 from federated_mcts.evaluation.game24_persistence import (
     AtomicTaskJournal,
+    BudgetExhaustedError,
+    CommitConflictError,
+    CommitError,
+    RecoveryReport,
     ResumeValidator,
+    RunJournal,
+    TaskCommitter,
 )
 
+__all__ = [
+    "AtomicTaskJournal",
+    "BudgetExhaustedError",
+    "CommitConflictError",
+    "CommitError",
+    "InjectedInterruption",
+    "RecoveryReport",
+    "ResumeValidator",
+    "RunJournal",
+    "TaskCommitter",
+    "compute_file_prefix",
+    "file_name_generater",
+    "make_task_recorder",
+    "persist_task",
+    "restore_completed_tasks",
+    "setup_journal_and_resume",
+]
 
-def _read_model_config(config_path: str) -> list[dict]:
-    with open(config_path) as f:
-        return json.load(f)
 
-
-def _resolve_backends_from_config(config_path: str, args) -> tuple[str, str]:
-    """Return (localbackend, remotebackend) from config, mutating args."""
-    cfg = _read_model_config(config_path)
-    lb = next(d["model"] for d in cfg if d.get("client_name") == "local_client")
-    rb = next(d["model"] for d in cfg if d.get("client_name") == "remote_client")
-    args.localbackend = lb
-    args.remotebackend = rb
-    return lb, rb
-
-
-def compute_file_prefix(args) -> str:
+def compute_file_prefix(args, task_count: int | None = None) -> str:
     """Return the output filename prefix WITHOUT creating directories.
 
     Pure computation — no os.makedirs, no I/O side effects.
-    """
-    if hasattr(args, "model_config"):
-        _resolve_backends_from_config(args.model_config, args)
 
+    *task_count* is the number of resolved task IDs for this run.  It is encoded
+    in the prefix as ``_ntasks{N}`` because ``task_start_index`` /
+    ``task_end_index`` do NOT describe which tasks actually run: a ``--pilot_ids``
+    run and a full ``--task_split`` run share the same indices, so without this
+    suffix both resolve to a byte-identical prefix and starting the second run
+    silently overwrites the first run's manifest, results, and journal in place.
+    Callers that have already resolved setup MUST pass it.
+    """
     if getattr(args, "naive_run", False):
         prefix = (
             f"./logs/{args.task}/{args.localbackend}/{args.remotebackend}/"
@@ -63,6 +88,8 @@ def compute_file_prefix(args) -> str:
         )
     if getattr(args, "game24_exact_prune", False):
         prefix += "_exactprune_True"
+    if task_count is not None:
+        prefix += f"_ntasks{int(task_count)}"
     return prefix
 
 
@@ -94,8 +121,13 @@ def setup_journal_and_resume(
     """
     import sys
 
+    if not resume and any(os.path.exists(file_name + suffix) for suffix in (
+            "_journal.json", "_budget.jsonl", "_manifest.json", "_preflight.json",
+            ".json", "_performance.json")):
+        print("FATAL: Output prefix already exists; use --resume for the same run or choose a new --inference_idx.", file=sys.stderr)
+        raise SystemExit(1)
     journal = AtomicTaskJournal(file_name + "_journal.json")
-    expected_fp = manifest.run_fingerprint if resume else ""
+    expected_fp = manifest.run_fingerprint
     rv = ResumeValidator(journal, expected_fp)
     can_cont, skip_str_ids, reason = rv.validate_resume(task_ids)
     if not can_cont:
@@ -117,7 +149,13 @@ def persist_task(
     task_metrics_json: str,
     elapsed_ms: float,
 ) -> None:
-    """Atomically write a completed task record with full runner state."""
+    """Atomically write a completed task record with full runner state.
+
+    Legacy ordering: this marks the task completed *before* its cost is
+    recorded, so a crash in between makes the spend unrecoverable.  New
+    integrations must use ``TaskCommitter.commit`` instead, which writes a
+    pending record, charges idempotently, then settles.
+    """
     journal.write_task(str(task_id), {
         "task_id": task_id,
         "ys": ys[-1] if ys else "",
@@ -169,7 +207,7 @@ def restore_completed_tasks(
 def make_task_recorder(
     is_game24: bool, task_id: int, task_input: str,
     decision_policy: str, oracle_audit: bool,
-) -> object | None:
+) -> TaskSessionRecorder | None:
     """Create a TaskSessionRecorder for Game24 tasks."""
     if not is_game24:
         return None

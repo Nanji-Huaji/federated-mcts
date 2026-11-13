@@ -1,131 +1,153 @@
-"""Runner-path matching-resume budget regression."""
+"""Real runner accounting across interruptions, using nonzero offline usage."""
 from __future__ import annotations
 
-import importlib.util
+from contextlib import ExitStack, redirect_stdout
+from dataclasses import replace
+from decimal import Decimal
+import io
 import json
 import os
-import shutil
-import sys
+from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-sys.path.insert(0, "src")
-
-
-class _Solver:
-    def __init__(self) -> None:
-        self.solved_ids: list[int] = []
-        self.latency_dict: dict[str, float] = {}
-
-    def solve(self, task, idx, **kwargs):
-        self.solved_ids.append(idx)
-        return [f"result_{idx}"], {"steps": []}
-
-    naive_solve = solve
-    speculative_solve = solve
-    federated_solve = solve
+from federated_mcts.evaluation.game24_budget import read_verified_ledger
+from federated_mcts.evaluation.game24_persistence import AtomicTaskJournal, TaskCommitter
+from federated_mcts.evaluation.game24_runner_args import parse_args
+from federated_mcts.experiments import runner
+from federated_mcts.models.usage import get_usage_tracker
 
 
-class _Task:
-    @staticmethod
-    def get_input(idx: int) -> str:
-        return "1 1 1 8"
+class Interrupted(BaseException):
+    pass
 
-    @staticmethod
-    def test_output_modify(idx: int, output: str) -> tuple[dict[str, int], str]:
-        return {"r": 0}, output
+
+class TinyTask:
+    def get_input(self, index):
+        return str(index)
+
+    def standard_prompt_wrap(self, x, y):
+        return x
+
+    def test_output_modify(self, index, output):
+        return {"r": int(output == str(index))}, output
+
+
+class MeteredClient:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, args, prompt, n=1, **kwargs):
+        self.calls.append(int(prompt))
+        # Exactly 0.0125 raw units per task, no API/network activity.
+        get_usage_tracker().record("gpt-4o", completion_tokens=1000, prompt_tokens=1000)
+        return [prompt] * n
 
 
 class TestMatchingResumeBudget(unittest.TestCase):
-    def setUp(self) -> None:
-        self.tmpdir = tempfile.mkdtemp()
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
         self.cwd = os.getcwd()
-        os.chdir(self.tmpdir)
-        os.makedirs("configs", exist_ok=True)
-        os.makedirs("data/24", exist_ok=True)
-        os.makedirs("logs/game24/tot/remote-model", exist_ok=True)
-        with open("configs/model_config.json", "w") as config:
-            json.dump([], config)
-        with open("data/24/24.csv", "w") as puzzles:
-            puzzles.write("Puzzles\n1 1 1 8\n2 2 2 6\n3 3 3 3\n")
+        os.chdir(self.tmp.name)
+        Path("models.json").write_text(json.dumps([
+            {"client_name": "remote_client", "model": "gpt-4o"},
+        ]))
+        self.client = MeteredClient()
 
-    def tearDown(self) -> None:
+    def tearDown(self):
         os.chdir(self.cwd)
-        shutil.rmtree(self.tmpdir, ignore_errors=True)
+        self.tmp.cleanup()
 
-    @staticmethod
-    def _args() -> MagicMock:
-        args = MagicMock()
-        values = {
-            "task": "game24", "task_split": None, "task_start_index": 0,
-            "task_end_index": 3, "naive_run": False, "solve_method": "tot",
-            "model_config": "configs/model_config.json", "localbackend": "local",
-            "remotebackend": "remote", "temperature": 0.7,
-            "method_generate": "propose", "method_evaluate": "vote",
-            "method_select": "greedy", "n_generate_sample": 1,
-            "n_evaluate_sample": 1, "n_select_sample": 1,
-            "search_policy": "baseline", "slm_generate": False,
-            "slm_eval": False, "check_format": False, "eval_rule": False,
-            "warm_start": False, "last_lm": False, "inference_idx": 0,
-            "game24_exact_prune": False, "max_cost_usd": None,
-            "assign_strategy": "round_robin", "prompt_sample": None,
-            "selected_test_auth": None, "game24_decision_policy": "local_validity",
-            "game24_oracle_audit": False, "seed": None, "max_total_calls": None,
-            "max_total_tokens": None, "max_raw_unit_limit": 2.0,
-            "review_round_identity": "review-1", "resume": True,
-            "filter": False, "pilot_ids": None, "dry_run": False, "mock_client": False,
-        }
-        for name, value in values.items():
-            setattr(args, name, value)
-        return args
+    def plan(self, *, budget="0.025", calls=None, tokens=None):
+        argv = ["--task", "text", "--task_start_index", "0", "--task_end_index", "3",
+                "--model_config", "models.json", "--solve_method", "naive",
+                "--prompt_sample", "standard", "--max_raw_unit_limit", budget]
+        if calls is not None:
+            argv += ["--max_total_calls", str(calls)]
+        if tokens is not None:
+            argv += ["--max_total_tokens", str(tokens)]
+        plan = runner.prepare(parse_args(argv))
+        self.assertIsNotNone(plan)
+        return plan
 
-    @staticmethod
-    def _manifest() -> MagicMock:
-        manifest = MagicMock()
-        manifest.to_json.return_value = "{}"
-        manifest.run_fingerprint = "matching-fingerprint"
-        manifest.decision_policy_fingerprint = "policy-fingerprint"
-        return manifest
+    def execute(self, plan):
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(runner, "get_task", return_value=TinyTask()))
+            stack.enter_context(patch("federated_mcts.models.clients.create_clients",
+                                      return_value={"remote_client": self.client}))
+            stack.enter_context(redirect_stdout(io.StringIO()))
+            return runner.execute(plan)
 
-    @staticmethod
-    def _runner():
-        root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-        spec = importlib.util.spec_from_file_location(
-            "_matching_resume_runner", os.path.join(root, "scripts", "merged_run.py"))
-        assert spec is not None and spec.loader is not None
-        runner = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(runner)
-        return runner
+    def test_matching_resume_uses_persisted_remaining_budget(self):
+        for phase in ("after_journal", "after_spend"):
+            with self.subTest(phase=phase):
+                plan = self.plan()
+                plan = replace(plan, setup=replace(plan.setup, file_name=phase))
+                self.client.calls.clear()
+                fault = (patch.object(TaskCommitter, "_charge", side_effect=Interrupted())
+                         if phase == "after_journal" else
+                         patch.object(AtomicTaskJournal, "mark_settled", side_effect=Interrupted()))
+                with fault, self.assertRaises(Interrupted):
+                    self.execute(plan)
+                journal = AtomicTaskJournal(phase + "_journal.json")
+                self.assertEqual(journal.completed_ids(), set())
+                self.assertEqual(journal.read_all()["0"]["cost_raw"], "0.0125")
+                resumed = self.execute(replace(plan, resume=True))
+                self.assertEqual(self.client.calls, [0, 1])
+                self.assertEqual(journal.completed_ids(), {"0", "1"})
+                self.assertEqual(read_verified_ledger(phase + "_budget.jsonl").spent, Decimal("0.025"))
+                self.assertEqual(resumed["gpt-4o"]["total_calls"], 2)
+                self.assertEqual(resumed["gpt-4o"]["total_tokens"], 4000)
+                self.assertFalse(resumed["complete"])
+                self.assertEqual(resumed["stop_reason"], "max_raw_unit_limit")
+                full = replace(plan, setup=replace(plan.setup, file_name=phase + "_full"))
+                self.client.calls.clear()
+                uninterrupted = self.execute(full)
+                self.assertEqual(self.client.calls, [0, 1])
+                self.assertEqual(uninterrupted["gpt-4o"], resumed["gpt-4o"])
+                self.assertEqual(uninterrupted["budget_spent"], resumed["budget_spent"])
+                before = Path(phase + "_budget.jsonl").read_bytes()
+                self.execute(replace(plan, resume=True))
+                self.assertEqual(Path(phase + "_budget.jsonl").read_bytes(), before)
 
-    def test_matching_resume_uses_persisted_remaining_budget(self) -> None:
-        from federated_mcts.evaluation.game24_budget import BudgetLedger
-        from federated_mcts.evaluation.game24_persistence import AtomicTaskJournal
+    def test_fresh_run_does_not_overwrite_an_existing_run(self):
+        plan = self.plan()
+        self.execute(plan)
+        journal = Path(plan.setup.file_name + "_journal.json")
+        before = journal.read_bytes()
+        self.client.calls.clear()
+        with self.assertRaises(SystemExit):
+            self.execute(plan)
+        self.assertEqual(journal.read_bytes(), before)
+        self.assertEqual(self.client.calls, [])
 
-        file_name = "logs/game24/tot/remote-model/_matching"
-        journal = AtomicTaskJournal(file_name + "_journal.json")
-        journal.write_meta(run_fingerprint="matching-fingerprint")
-        journal.write_task("0", {
-            "task_id": 0, "_completed": True,
-            "task_info": {"idx": 0, "infos": [{"r": 0}]},
-        })
-        ledger = BudgetLedger(file_name + "_budget.jsonl", total_limit=2.0)
-        self.assertTrue(ledger.spend(1.0))
-        solver = _Solver()
-        runner = self._runner()
-        with patch.object(runner, "compute_file_prefix", return_value=file_name):
-            with patch.object(runner, "build_manifest", return_value=self._manifest()):
-                with patch.object(runner, "consume_authorization", return_value=(True, "")):
-                    with patch.object(runner, "FederatedSolver", return_value=solver):
-                        with patch.object(runner, "get_task", return_value=_Task()):
-                            with patch.object(runner, "compute_task_raw_unit_cost", return_value=1.0):
-                                with patch.object(runner, "enrich_result"):
-                                    with patch.object(runner, "merge_oracle_metrics"):
-                                        runner.run(self._args(), "tot")
-        self.assertEqual(solver.solved_ids, [1])
-        self.assertEqual(journal.completed_ids(), {"0", "1"})
-        self.assertEqual(
-            BudgetLedger(file_name + "_budget.jsonl").remaining, 0.0)
+    def test_in_flight_interruption_is_not_silently_rerun(self):
+        plan = self.plan()
+        with patch.object(MeteredClient, "__call__", side_effect=Interrupted()):
+            with self.assertRaises(Interrupted):
+                self.execute(plan)
+        journal = AtomicTaskJournal(plan.setup.file_name + "_journal.json")
+        self.assertEqual(journal.read_all()["0"]["execution_state"], "running")
+        with self.assertRaisesRegex(ValueError, "in-flight"):
+            self.execute(replace(plan, resume=True))
+        self.assertEqual(self.client.calls, [])
+
+    def test_runs_use_separate_usage_scopes(self):
+        plan = self.plan(budget="1")
+        outside_before = get_usage_tracker().get_summary()
+        first = self.execute(plan)
+        second = self.execute(replace(plan, setup=replace(plan.setup, file_name="other")))
+        self.assertEqual(first["gpt-4o"], second["gpt-4o"])
+        self.assertEqual(second["gpt-4o"]["total_calls"], 3)
+        self.assertEqual(get_usage_tracker().get_summary(), outside_before)
+
+    def test_last_task_cap_violation_is_not_marked_complete(self):
+        plan = self.plan(budget="1", calls=2)
+        result = self.execute(plan)
+        self.assertEqual(self.client.calls, [0, 1, 2])
+        self.assertFalse(result["complete"])
+        self.assertEqual(result["stop_reason"], "max_total_calls")
 
 
 if __name__ == "__main__":

@@ -11,11 +11,9 @@ import json
 from math import ceil
 from typing import Literal, Tuple, List, Dict, Callable, Union, overload
 import federated_mcts.utils.uncertainty as uncertainty
-from federated_mcts.evaluation.game24_instrumentation import (
+from federated_mcts.core.observation import (
     CandidateProposalRecord,
-    GenerationRecorder,
-)
-from federated_mcts.evaluation.game24_generation_recording import (
+    GenerationObservationSink,
     record_proposal_step,
     record_unchecked_proposals,
 )
@@ -33,7 +31,7 @@ def get_proposals_with_check(
     client=None,
     get_logprobs=False,
     n_generate=4,
-    recorder: GenerationRecorder | None = None,
+    recorder: GenerationObservationSink | None = None,
     parent_index: int = 0,
 ) -> list[str]:
     # jinyu:
@@ -111,7 +109,7 @@ def get_proposals_without_check(
     model=None,
     client=None,
     get_logprobs=False,
-    recorder: GenerationRecorder | None = None,
+    recorder: GenerationObservationSink | None = None,
     parent_index: int = 0,
 ) -> list[str]:
     propose_prompt = task.propose_prompt_wrap(x, y)
@@ -150,7 +148,7 @@ def get_proposals(
     client=None,
     get_logprobs=False,
     n_generate=4,
-    recorder: GenerationRecorder | None = None,
+    recorder: GenerationObservationSink | None = None,
     parent_index: int = 0,
 )-> list[str]:
     if args.check_format:

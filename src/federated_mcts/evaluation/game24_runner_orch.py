@@ -65,50 +65,19 @@ def run_preflight_and_dry_run(
 
 
 def setup_mock_solver(args, setup: ExperimentSetup, solver_cls=None):
-    """Create FederatedSolver — when mock_client, bypasses real __init__.
+    """Build adapters after authorization, then use the normal injected solver.
 
-    When ``--mock_client`` is set, the real ``FederatedSolver.__init__``
-    is NEVER called.  Instead, the object is allocated via
-    ``object.__new__`` and only the essential attributes (gpts, args,
-    time_tracker) are set.  This guarantees no HTTP client, API key
-    reading, model_config loading, or network I/O occurs.
-
-    A test that patches ``FederatedSolver.__init__`` to unconditionally
-    raise can prove mock mode never reaches the real constructor.
-
-    When *solver_cls* is provided (e.g. a mock.patch target), it is
-    used in non-mock mode so existing tests that replace
-    ``FederatedSolver`` continue to work.
+    Offline and real runs exercise exactly the same constructor and search code.
+    This boundary is the only runner code that resolves model credentials.
     """
-    import json as _json
-
+    clients: dict
     if setup.mock_client:
         from federated_mcts.evaluation.game24_mock_client import build_mock_gpts
-        from federated_mcts.federation.time_tracker import TimeTracker
-
-        with open(setup.model_config_path) as f:
-            model_config = _json.load(f)
-        mock_gpts = build_mock_gpts(model_config)
-
-        # Allocate solver without calling __init__ at all
-        # Use FederatedSolver only for the mixin methods, not construction
-        if solver_cls is not None:
-            solver = object.__new__(solver_cls)
-        else:
-            from federated_mcts.federation import FederatedSolver as _FS
-            solver = object.__new__(_FS)
-
-        solver.args = args
-        solver.gpts = mock_gpts
-        solver.time_tracker = TimeTracker(list(mock_gpts.keys()))
-        # latency_dict is a property backed by time_tracker — no need to set
-        solver.dqn_session = None
-        if hasattr(solver, "_strategy_cache"):
-            solver._strategy_cache = {}
-        return solver
-
-    # Non-mock path: use real constructor
+        clients = build_mock_gpts(setup.model_configs)
+    else:
+        from federated_mcts.models.clients import create_clients
+        clients = create_clients(setup.model_configs, default_temperature=args.temperature)
     if solver_cls is None:
-        from federated_mcts.federation import FederatedSolver as _FS
-        solver_cls = _FS
-    return solver_cls(args)
+        from federated_mcts.federation import FederatedSolver
+        solver_cls = FederatedSolver
+    return solver_cls(args, clients=clients)

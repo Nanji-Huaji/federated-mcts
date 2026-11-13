@@ -17,6 +17,8 @@ Follows Todo 3 V2 reviewer requirements + Wave 3 baseline safety:
 from __future__ import annotations
 
 import json
+from decimal import Decimal
+from federated_mcts.models.rates import DEFAULT_RATE_CARD
 import os
 
 from federated_mcts.evaluation.game24_manifest import (
@@ -32,6 +34,7 @@ from federated_mcts.evaluation.game24_authorization import (
     make_auth_key,
 )
 from federated_mcts.evaluation.game24_preflight import (
+    FULL_VALIDATION_GATE,
     PreflightProjection,
     build_projection,
     reconcile_budget_after_tasks,
@@ -53,15 +56,9 @@ __all__ = [
 
 def build_manifest(setup: ExperimentSetup) -> Game24Manifest:
     """Create the immutable manifest from experiment setup."""
-    model_config_raw: list[dict] = []
-    if os.path.exists(setup.model_config_path):
-        with open(setup.model_config_path) as f:
-            model_config_raw = json.load(f)
+    model_config_raw = setup.model_configs
 
     seed_value = setup.seed if setup.seed is not None else 0
-    if setup.seed is not None:
-        apply_seed(setup.seed)
-
     return Game24Manifest(
         task=setup.task,
         task_ids=setup.task_ids,
@@ -84,6 +81,9 @@ def build_manifest(setup: ExperimentSetup) -> Game24Manifest:
         max_raw_unit_limit=setup.max_raw_unit_limit,
         split_file_path=setup.split_file_path,
         model_config_raw=model_config_raw,
+        schema_version=2 if setup.decision is not None else 1,
+        decision_spec=setup.decision,
+        runner_path="fmcts-run" if setup.decision is not None else "scripts/merged_run.py",
     )
 
 
@@ -102,14 +102,11 @@ def build_preflight(setup: ExperimentSetup) -> PreflightProjection | None:
 
     Returns ``None`` if the model config cannot be loaded.
     """
-    model_config_raw: list[dict] = []
-    if os.path.exists(setup.model_config_path):
-        with open(setup.model_config_path) as f:
-            model_config_raw = json.load(f)
+    model_config_raw = setup.model_configs
     if not model_config_raw:
         return None
 
-    gate = 0.75
+    gate = FULL_VALIDATION_GATE
     return build_projection(
         n_tasks=200 if setup.task_split_name == "test" else len(setup.task_ids),
         model_config_raw=model_config_raw,
@@ -160,13 +157,15 @@ def consume_authorization(
 def check_budget_caps(
     budget_ledger: BudgetLedger,
     max_cost_usd: float | None,
+    *, usage: dict | None = None,
 ) -> tuple[bool, str | None]:
     """Check all budget caps before starting the next task.
 
     Returns ``(True, None)`` if all caps are satisfied, or
     ``(False, stop_reason)`` if a cap has been exceeded.
     """
-    usage = get_model_usage_summary()
+    if usage is None:
+        usage = get_model_usage_summary()
     total_calls = sum(s.get("total_calls", 0) for s in usage.values())
     total_tokens = sum(s.get("total_tokens", 0) for s in usage.values())
 
@@ -204,45 +203,18 @@ def enrich_result(
     return res_json
 
 
-# ── Model prices from usage tracker (same source for consistency) ──
-_MODEL_PRICES: dict[str, dict[str, float]] = {
-    "gpt-4o": {"prompt": 2.5, "completion": 10.0},
-    "gpt-4": {"prompt": 15.0, "completion": 30.0},
-    "gpt-3.5-turbo": {"prompt": 0.75, "completion": 1.5},
-    "meta-llama-3.1-8b-instruct@q4_k_m": {"prompt": 0.0, "completion": 0.0},
-    "phi-3-medium-4k-instruct": {"prompt": 0.0, "completion": 0.0},
-    "deepseek-v4-flash": {"prompt": 0.14, "completion": 0.28},
-    "deepseek-v4-pro": {"prompt": 0.435, "completion": 0.87},
-}
-
-
 def compute_task_raw_unit_cost(
-    prev_summary: dict[str, dict[str, float]],
-    current_summary: dict[str, dict[str, float]],
-) -> float:
-    """Return the incremental raw-unit cost from *prev_summary* to *current_summary*.
-
-    Uses the same per-model pricing as the usage tracker for consistency.
-    Raises ``ValueError`` for any model that has a positive token delta but
-    no entry in ``_MODEL_PRICES``, enforcing fail-closed billing safety.
-    """
-    total = 0.0
+    prev_summary: dict,
+    current_summary: dict,
+) -> Decimal:
+    """Price incremental usage exactly with the shared versioned rate card."""
+    total = Decimal("0")
     for model, cur in current_summary.items():
         prev = prev_summary.get(model, {})
-        delta_prompt = int(cur.get("prompt_tokens", 0)) - int(prev.get("prompt_tokens", 0))
-        delta_compl = int(cur.get("completion_tokens", 0)) - int(prev.get("completion_tokens", 0))
-        if delta_prompt <= 0 and delta_compl <= 0:
-            continue
-        price = _MODEL_PRICES.get(model)
-        if price is None:
-            raise ValueError(
-                f"Unknown billed model '{model}': no pricing configured in "
-                f"_MODEL_PRICES (delta_prompt={delta_prompt}, "
-                f"delta_completion={delta_compl}). "
-                f"Add it to _MODEL_PRICES in game24_runner.py."
-            )
-        total += (
-            delta_compl * price["completion"] / 1_000_000
-            + delta_prompt * price["prompt"] / 1_000_000
-        )
+        prompt = int(cur.get("prompt_tokens", 0)) - int(prev.get("prompt_tokens", 0))
+        completion = int(cur.get("completion_tokens", 0)) - int(prev.get("completion_tokens", 0))
+        if prompt < 0 or completion < 0:
+            raise ValueError("Run usage counters decreased")
+        if prompt or completion:
+            total += DEFAULT_RATE_CARD.cost_raw_units(model, completion, prompt)
     return total

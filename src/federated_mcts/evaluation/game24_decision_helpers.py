@@ -36,9 +36,24 @@ class _SolverTask(_Protocol):
 
 
 def _parse_canonical_numbers(y: str) -> tuple[Fraction, ...]:
+    """Return the multiset of numbers remaining after a (possibly multi-line) move.
+
+    A candidate is a chain of steps, each ending in ``(left: ...)``; only the
+    **last** such group describes the state the move leads to.  Using the first
+    group instead reports the *starting* state, which makes a deep candidate look
+    reachable whenever the task itself was reachable -- so every candidate from a
+    solvable task scores as reachable and reachability carries no information.
+
+    ``re.findall`` is required: ``re.search`` returns only the first match.
+    """
     import re
-    match = re.search(r"left:\s*([^)]+)", y)
-    parts = match.group(1).strip().split() if match else y.strip().split()
+    groups = re.findall(r"left:\s*([^)]+)", y)
+    if groups:
+        parts = groups[-1].strip().split()
+    else:
+        # No ``left:`` marker: fall back to the whole text, which is correct for
+        # a bare number list such as the initial task input.
+        parts = y.strip().split()
     nums: list[Fraction] = []
     for p in parts:
         try:

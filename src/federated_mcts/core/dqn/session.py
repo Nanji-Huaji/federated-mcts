@@ -9,17 +9,23 @@ transition receives the exact correctness reward (finalize) minus bounded
 token/latency penalties.  The action is always chosen BEFORE the current
 step's joint ranking, from candidate/dedup structure, previous-step value
 stats and cumulative budgets.
+
+Exact verification belongs to the caller (``finish_task``): the terminal
+transition is held until :meth:`DqnSearchSession.finalize` supplies the real
+success flag, so the recorded reward is final on its first write.
 """
 
 from __future__ import annotations
 
 import time
+from typing import Callable
 
 from federated_mcts.core.dqn.episode import DqnEpisode
 from federated_mcts.core.dqn.step import DqnStepOutcome
-from federated_mcts.core.dqn.transition_rewards import build_reward_components
+from federated_mcts.core.evaluation import EvaluatorValueCache
 from federated_mcts.core.joint_ranking import evaluate_ranked_candidates
 from federated_mcts.core.search_policy import deduplicate_candidates, successful_candidate
+from federated_mcts.models.usage import get_usage_tracker
 
 
 class DqnSearchSession:
@@ -34,6 +40,7 @@ class DqnSearchSession:
         jsonl_path: str | None = None,
         oracle_distance_reward_enabled: bool = False,
         oracle_distance_scale: float = 0.25,
+        evaluator_cache_for: Callable[[object, str, object, str], EvaluatorValueCache] | None = None,
     ):
         self.controller = controller
         self.token_budget = float(token_budget)
@@ -49,23 +56,50 @@ class DqnSearchSession:
         self._oracle_distance: int | None = None
         self._oracle_optimal: int | None = None
         self._previous_beam_width: int | None = None
-        self._value_cache: dict = {}
+        # The joint-ranking score cache is partitioned by the evaluator's
+        # client *instance* and identity, then reset when the solved task or
+        # its input changes.  One session therefore never mixes scores from
+        # two tasks, two adapters, or two labels.
+        self._value_caches: dict[tuple[int, str], dict] = {}
+        self._client_refs: dict[int, object] = {}
+        self._task = None
+        self._input: str | None = None
+        self._evaluator_cache_for = evaluator_cache_for
         self.last_values: list[float] | None = None
         self.last_joint_rank: bool | None = None
         self._cumulative_tokens = 0.0
         self._cumulative_latency = 0.0
+
     def drain_transitions(self) -> list[dict]:
         return self._episode.drain()
 
-    def finish_episode(self, success: bool = False) -> None:
-        """Close any dangling pending transition as the terminal one."""
-        self._episode.finish(bool(success))
+    def finish_episode(self, success: bool = False, *, flush_terminal: bool = True) -> None:
+        """Close any dangling pending transition as the terminal one.
+
+        ``flush_terminal=False`` leaves the terminal record unpublished until
+        :meth:`finalize` learns the exact verification result.
+        """
+        self._episode.finish(bool(success), flush_terminal=flush_terminal)
 
     def finalize(self, terminal_success: bool) -> None:
-        """Re-attribute the exact task reward to the final transition,
-        replacing the provisional success-state heuristic used at solve time
-        (the runner only knows the exact reward after task.test_output_modify)."""
+        """Attribute the exact task reward to the final transition and publish it."""
         self._episode.finalize(bool(terminal_success))
+
+    # -- evaluator-scoped caches -------------------------------------------
+
+    def _ranking_cache(self, task, x: str, client, evaluator_id: str) -> dict:
+        if task is not self._task or x != self._input:
+            self._task, self._input = task, x
+            self._value_caches.clear()
+            self._client_refs.clear()
+        client_key = id(client)
+        self._client_refs.setdefault(client_key, client)
+        return self._value_caches.setdefault((client_key, evaluator_id), {})
+
+    def _value_cache(self, task, x: str, client, evaluator_id: str) -> EvaluatorValueCache | None:
+        if self._evaluator_cache_for is None:
+            return None
+        return self._evaluator_cache_for(task, evaluator_id, client, x)
 
     # -- per-step processing ------------------------------------------------
 
@@ -84,6 +118,7 @@ class DqnSearchSession:
         step_latency: float = 0.0,
     ) -> DqnStepOutcome:
         unique, states = deduplicate_candidates(task, x, candidates)
+        ranking_cache = self._ranking_cache(task, x, client, evaluator_id)
         from federated_mcts.core.dqn.oracle_session import (
             initial_distance,
             oracle_distance_enabled,
@@ -122,6 +157,7 @@ class DqnSearchSession:
         else:
             joint_rank = self.last_joint_rank if self.last_joint_rank is not None else False
 
+        evaluation_tokens_before = get_usage_tracker().get_total_tokens()
         if success is not None:
             values = [1.0 if candidate == success else 0.0 for candidate in unique]
             select_new_ys = [success]
@@ -141,8 +177,9 @@ class DqnSearchSession:
                 unique,
                 client,
                 evaluator_id,
-                self._value_cache,
+                ranking_cache,
                 joint_rank=joint_rank,
+                value_cache=self._value_cache(task, x, client, evaluator_id),
             )
             eval_seconds = time.time() - ranking_start
             width = max(1, min(decision_state.beam, len(unique)))
@@ -152,8 +189,10 @@ class DqnSearchSession:
             select_new_ys = [unique[index] for index in selected_ids]
             stopped = False
 
-        self._episode.add_costs(tokens=step_tokens, latency=step_latency + eval_seconds)
-        self._cumulative_tokens += step_tokens
+        eval_tokens = max(0, get_usage_tracker().get_total_tokens() - evaluation_tokens_before)
+        total_step_tokens = step_tokens + eval_tokens
+        self._episode.add_costs(tokens=total_step_tokens, latency=step_latency + eval_seconds)
+        self._cumulative_tokens += total_step_tokens
         self._cumulative_latency += step_latency + eval_seconds
 
         if oracle_enabled and self._episode.pending is not None:
@@ -172,6 +211,11 @@ class DqnSearchSession:
             "dqn_action": action,
             "dqn_beam": None if decision_state is None else decision_state.beam,
             "dqn_joint_rank": joint_rank,
+            "step_tokens": float(step_tokens),
+            "eval_tokens": float(eval_tokens),
+            "total_step_tokens": float(total_step_tokens),
+            "step_latency": float(step_latency),
+            "eval_seconds": float(eval_seconds),
         }
         return DqnStepOutcome(
             candidates=unique,

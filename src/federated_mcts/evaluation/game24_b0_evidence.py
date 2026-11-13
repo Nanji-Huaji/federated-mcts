@@ -18,7 +18,12 @@ from federated_mcts.evaluation.game24_b0_manifest_loader import (
 )
 
 SCHEMA_VERSION: int = 1
-FULL_VALIDATION_GATE: Decimal = Decimal("0.75")
+FULL_VALIDATION_GATE: Decimal = Decimal("20.0")
+"""Maximum projected raw units for full 200-ID validation.
+
+Re-baselined from 0.75 on 2026-08-10 against measured reasoning-model cost;
+see ``.omo/evidence/b0-gate-rebaseline-rationale.md``.
+"""
 RAW_UNIT_PRECISION: Decimal = Decimal("0.00000001")
 
 
@@ -26,12 +31,57 @@ PILOT_TASK_COUNT: int = 20
 FULL_TASK_COUNT: int = 200
 SCALE_FACTOR: Decimal = Decimal(str(FULL_TASK_COUNT)) / Decimal(str(PILOT_TASK_COUNT))
 
-# Canonical B0 pilot expected values (corrected idx=1 telemetry)
-B0_EXPECTED_CALLS: int = 160
-B0_EXPECTED_PROMPT_TOKENS: int = 64960
-B0_EXPECTED_COMPLETION_TOKENS: int = 81919
-B0_EXPECTED_TOTAL_TOKENS: int = 146879
-B0_EXPECTED_SPENT: Decimal = Decimal("0.03203172")
+# Canonical B0 pilot expected values, re-pinned from the first COMPLETE run.
+#
+# Provenance: the 20-ID canonical pilot executed on 2026-08-13 against
+# ``https://llmgw.byr.ink/v1`` with ``qwen3.7-plus`` (``enable_thinking=false``),
+# ``decision_policy=local_validity``, ``oracle_audit=True``, seed 17, and
+# n_generate/n_evaluate/n_select = 2/3/2.  Run finished with ``complete: true``
+# across all 20/20 tasks.
+#
+# The previous pins described a historical ``deepseek-v3`` run executed with a
+# 512-token cap.  That configuration is retired and its numbers cannot recur
+# (``81919 / 160 = exactly 512`` completion tokens per call encoded the truncated
+# behaviour that made every response empty).  Those values were deliberately kept
+# unedited until a genuine replacement run existed rather than being quietly
+# falsified.
+#
+# KNOWN BRITTLENESS: this run is LLM-sampled at temperature 0.9, so the token and
+# spend totals are NOT reproducible across re-runs — two pilots of the same 20 IDs
+# with the same seed produced 163 vs 165 calls and 0.1664672 vs 0.1688832 raw
+# units (task-level outcomes also moved: 14/20 vs 12/20).  Re-pinning a single
+# run's exact totals therefore makes these constants invalidate on every re-run.
+# They are pinned to the single retained evidence set so the fail-closed gate is
+# exercisable; treat them as a provenance seal for THAT run, not as a target.
+#
+# ---------------------------------------------------------------------------
+# NOTE: the five numeric pins (B0_EXPECTED_CALLS / _PROMPT_TOKENS /
+# _COMPLETION_TOKENS / _TOTAL_TOKENS / _SPENT) were DELETED deliberately.
+#
+# They pinned resource telemetry to the exact numbers of one LLM-sampled run and
+# were compared with exact equality, so any legitimate re-run was rejected.  Two
+# identical pilots (same 20 IDs, same seed 17, same config, both ``complete``)
+# produced 163 vs 165 calls and 0.16646720 vs 0.16888320 raw units, and task-level
+# accuracy moved 14/20 vs 12/20 — the totals are sampling outcomes, not
+# configuration.
+#
+# They were removed rather than widened to a tolerance band because they carried
+# no real protection:
+#   * The budget ceiling is enforced at RUNTIME by ``--max_cost_usd``
+#     (scripts/merged_run.py), reading the actual hash-chained ledger.  It never
+#     consults these constants, so fabricating telemetry past the gate buys no
+#     budget headroom.
+#   * Every tamper test in tests/test_game24_b0_tamper.py is anchored on
+#     fingerprints, the hash chain, or structural completeness — none on the
+#     numeric values.
+#   * ``raw_units_spent`` is taken from the hash-chained ledger, not from the
+#     pins, so the projection is unaffected by their removal.
+#
+# What still binds, unchanged: manifest task-ID set and order, decision fields,
+# both fingerprints, ``complete``, journal completeness and run_fingerprint
+# agreement, the budget hash chain, internal telemetry consistency, and the
+# SHA-256 of all four artifacts.
+# ---------------------------------------------------------------------------
 
 B0_EXPECTED_DECISION_POLICY: str = "local_validity"
 B0_EXPECTED_ORACLE_AUDIT: bool = True

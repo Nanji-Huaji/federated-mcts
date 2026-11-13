@@ -50,85 +50,88 @@ Input: {input}
 
 # jinyu, 24/11/15
 propose_prompt = """
-Now we are going to use the input to play game of 24. Please imitate the example below and write out the Possible next steps based on the numbers in the Input.
+Now we are going to use the input to play game of 24. Please follow the output format shown in the example below and write out the Possible next steps based on the numbers in the Input.
+The example below is a FORMAT ILLUSTRATION ONLY. Its symbols are placeholders, not real numbers, and they are NOT the task. Solve ONLY the numbers on the "Input:" line.
 Please note: each number can only be used once, and try to avoid generating completely identical operations.
 Please strictly adhere to the following output format and do not output any text other than these formats.
 Please express only the latest steps when stating possible next steps, without repeating the steps that have already been expressed before.
 Please do not forget that after two numbers are operated on, what remains is and only is the result of their operation.
 Please note that each possible next step is independent of one another.
 If the given input has already reached 24, please do not perform any operations and directly output the original input.
-Input: 2 8 8 14
+Input: <n1> <n2> <n3> <n4>
 Possible next steps:
-2 + 8 = 10 (left: 8 10 14)
-8 / 2 = 4 (left: 4 8 14)
-14 + 2 = 16 (left: 8 8 16)
-2 * 8 = 16 (left: 8 14 16)
-8 - 2 = 6 (left: 6 8 14)
-14 - 8 = 6 (left: 2 6 8)
-14 /  2 = 7 (left: 7 8 8)
-14 - 2 = 12 (left: 8 8 12)
+<n1> + <n2> = <d> (left: <n3> <n4> <d>)
+<n1> - <n2> = <d> (left: <n2> <n3> <d>)
+<n1> * <n2> = <d> (left: <n3> <n4> <d>)
+<n1> / <n2> = <d> (left: <n3> <n4> <d>)
+<n3> + <n4> = <d> (left: <n1> <n2> <d>)
+<n3> - <n4> = <d> (left: <n1> <n2> <d>)
+<n3> * <n4> = <d> (left: <n1> <n2> <d>)
+<n3> / <n4> = <d> (left: <n1> <n2> <d>)
 Input: {input}
 Possible next steps:
 """
 
-propose_prompt_backup_s0 = """Now we are going to use the input to play game of 24. Please imitate the example below and write out the Possible next steps based on the numbers in the Input.
+propose_prompt_backup_s0 = """Now we are going to use the input to play game of 24. Please follow the output format shown in the example below and write out the Possible next steps based on the numbers in the Input.
+The example below is a FORMAT ILLUSTRATION ONLY. Its symbols are placeholders, not real numbers, and they are NOT the task. Solve ONLY the numbers on the "Input:" line.
 Please note: each number can only be used once, and try to avoid generating completely identical operations.
 Please strictly adhere to the following output format and do not output any text other than these formats.
 Please express only the latest steps when stating possible next steps, without repeating the steps that have already been expressed before.
 Please do not forget that after two numbers are operated on, what remains is and only is the result of their operation.
 Please note that each possible next step is independent of one another.
 If the given input has already reached 24, please do not perform any operations and directly output the original input.
-Input: 2 8 8 14
+Input: <n1> <n2> <n3> <n4>
 Possible next steps:
-2 + 8 = 10 (left: 8 10 14)
-8 / 2 = 4 (left: 4 8 14)
-14 + 2 = 16 (left: 8 8 16)
-2 * 8 = 16 (left: 8 14 16)
-8 - 2 = 6 (left: 6 8 14)
-14 - 8 = 6 (left: 2 6 8)
-14 /  2 = 7 (left: 7 8 8)
-14 - 2 = 12 (left: 8 8 12)
+<n1> + <n2> = <d> (left: <n3> <n4> <d>)
+<n1> - <n2> = <d> (left: <n2> <n3> <d>)
+<n1> * <n2> = <d> (left: <n3> <n4> <d>)
+<n1> / <n2> = <d> (left: <n3> <n4> <d>)
+<n3> + <n4> = <d> (left: <n1> <n2> <d>)
+<n3> - <n4> = <d> (left: <n1> <n2> <d>)
+<n3> * <n4> = <d> (left: <n1> <n2> <d>)
+<n3> / <n4> = <d> (left: <n1> <n2> <d>)
 Input: {input}
 Possible next steps:
 """
 
-propose_prompt_backup_s1 = """Now we are going to use the input to play game of 24. Please imitate the example below and write out the Possible next steps based on the numbers in the Input.
+propose_prompt_backup_s1 = """Now we are going to use the input to play game of 24. Please follow the output format shown in the example below and write out the Possible next steps based on the numbers in the Input.
+The example below is a FORMAT ILLUSTRATION ONLY. Its symbols are placeholders, not real numbers, and they are NOT the task. Solve ONLY the numbers on the "Input:" line.
 Please note: each number can only be used once, and try to avoid generating completely identical operations.
 Please strictly adhere to the following output format and do not output any text other than these formats.
 Please express only the latest steps when stating possible next steps, without repeating the steps that have already been expressed before.
 Please do not forget that after two numbers are operated on, what remains is and only is the result of their operation.
 Please note that each possible next step is independent of one another.
 If the given input has already reached 24, please do not perform any operations and directly output the original input.
-Input: 2 6 8
+Input: <n1> <n2> <n3>
 Possible next steps:
-6 / 2 = 3 (left: 3 8)
-8 / 2 = 4 (left: 4 6)
-2 * 8 = 16 (left: 6 16)
-8 - 2 = 6 (left: 6 6)
-2 + 8 = 10 (left: 6 10)
-2 * 6 = 12 (left: 8 12)
-2 + 6 = 8 (left: 8 8)
-6 - 2 = 4 (left: 4 8)
+<n1> + <n2> = <d> (left: <n3> <d>)
+<n1> - <n2> = <d> (left: <n2> <d>)
+<n1> * <n2> = <d> (left: <n3> <d>)
+<n1> / <n2> = <d> (left: <n3> <d>)
+<n2> + <n3> = <d> (left: <n1> <d>)
+<n2> - <n3> = <d> (left: <n1> <d>)
+<n2> * <n3> = <d> (left: <n1> <d>)
+<n2> / <n3> = <d> (left: <n1> <d>)
 Input: {input}
 Possible next steps:
 """
 
-propose_prompt_backup_s2 = """Now we are going to use the input to play game of 24. Please imitate the example below and write out the Possible next steps based on the numbers in the Input.
+propose_prompt_backup_s2 = """Now we are going to use the input to play game of 24. Please follow the output format shown in the example below and write out the Possible next steps based on the numbers in the Input.
+The example below is a FORMAT ILLUSTRATION ONLY. Its symbols are placeholders, not real numbers, and they are NOT the task. Solve ONLY the numbers on the "Input:" line.
 Please note: each number can only be used once, and try to avoid generating completely identical operations.
 Please strictly adhere to the following output format and do not output any text other than these formats.
 Please express only the latest steps when stating possible next steps, without repeating the steps that have already been expressed before.
 Please do not forget that after two numbers are operated on, what remains is and only is the result of their operation.
 Please note that each possible next step is independent of one another.
 If the given input has already reached 24, please do not perform any operations and directly output the original input.
-Input: 4 6
+Input: <n1> <n2>
 Possible next steps and left number:
-4 * 6 = 24 (left: 24)
-4 + 6 = 10 (left: 10)
-6 - 4 = 2 (left: 2)
-4 - 6 = -2 (left: -2)
-6 - 4 = 2 (left: 2)
-4 / 6 = 0.67 (left: 0.67)
-6 / 4 = 1.5 (left: 1.5)
+<n1> * <n2> = <d> (left: <d>)
+<n1> + <n2> = <d> (left: <d>)
+<n1> - <n2> = <d> (left: <d>)
+<n2> - <n1> = <d> (left: <d>)
+<n1> / <n2> = <d> (left: <d>)
+<n2> / <n1> = <d> (left: <d>)
 Input: {input}
 Possible next steps and left number:
 """

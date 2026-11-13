@@ -16,7 +16,6 @@ sys.path.insert(0, "src")
 
 from federated_mcts.evaluation.game24_b0_evidence import (
     B0EvidenceRecord,
-    B0_EXPECTED_SPENT,
     CANONICAL_PILOT_IDS,
     SCALE_FACTOR,
     SCHEMA_VERSION,
@@ -29,10 +28,16 @@ from federated_mcts.evaluation.game24_b0_manifest_loader import (
 )
 
 
+# Local reference spend for projection arithmetic.  Deliberately NOT imported
+# from production: the production pins were removed because they were a
+# sampling outcome, and these tests exercise the arithmetic, not the value.
+REFERENCE_SPENT = Decimal("0.16888320")
+
+
 class TestB0Projection(unittest.TestCase):
     """Given evidence, When computing projection, Then correct terms."""
 
-    def _ev(self, spent=B0_EXPECTED_SPENT) -> B0EvidenceRecord:
+    def _ev(self, spent=REFERENCE_SPENT) -> B0EvidenceRecord:
         return B0EvidenceRecord(
             schema_version=SCHEMA_VERSION, pilot_ids=list(CANONICAL_PILOT_IDS),
             pilot_id_count=20, decision_policy="local_validity",
@@ -68,7 +73,7 @@ class TestB0Projection(unittest.TestCase):
 
     def test_exact_formula(self):
         p, sp, rp = compute_b0_projection(self._ev())
-        self.assertEqual(p.pilot_usage, B0_EXPECTED_SPENT)
+        self.assertEqual(p.pilot_usage, REFERENCE_SPENT)
         self.assertEqual(p.scale_factor, SCALE_FACTOR)
         self.assertEqual(p.startup_overhead, Decimal("0"))
         self.assertEqual(p.retry_allowance, Decimal("0"))
@@ -76,11 +81,12 @@ class TestB0Projection(unittest.TestCase):
 
     def test_scaled_is_10x(self):
         p, _, _ = compute_b0_projection(self._ev())
-        exp = (B0_EXPECTED_SPENT * SCALE_FACTOR).quantize(Decimal("0.00000001"))
+        exp = (REFERENCE_SPENT * SCALE_FACTOR).quantize(Decimal("0.00000001"))
         self.assertEqual(p.scaled_usage, exp)
 
     def test_over_gate_fails(self):
-        p, _, _ = compute_b0_projection(self._ev(spent=Decimal("0.1")))
+        """A pilot whose 10x projection exceeds the gate must not pass."""
+        p, _, _ = compute_b0_projection(self._ev(spent=Decimal("10")))
         self.assertFalse(p.gate_passed)
 
     def test_json_serializable(self):

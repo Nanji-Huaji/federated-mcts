@@ -5,10 +5,7 @@ the existing api_client.gpt() with vLLM-specific defaults and helpers.
 """
 
 from functools import partial
-from typing import TYPE_CHECKING, Dict, Optional
-
-if TYPE_CHECKING:
-    from federated_mcts.federation.standard_solvers import StandardSolverArgs
+from typing import Dict, Optional
 
 from federated_mcts.models.api_client import gpt
 
@@ -42,7 +39,7 @@ class VLLMClient:
 
     def __call__(
         self,
-        args: "StandardSolverArgs",
+        args: object,
         prompt: str,
         n: int = 1,
         stop: str | list[str] | None = None,

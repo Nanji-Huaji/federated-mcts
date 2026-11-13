@@ -45,6 +45,7 @@ class BudgetAwareDQNController:
         epsilon: float = 1.0,
         seed: int = 0,
         checkpoint_path: str | None = None,
+        checkpoint_sha256: str | None = None,
         collect_without_checkpoint: bool = True,
         hidden_sizes=(64, 64),
         capacity: int = 10000,
@@ -65,6 +66,7 @@ class BudgetAwareDQNController:
                 state_dim=state_dim,
                 action_count=action_count,
                 hidden_sizes=hidden_sizes,
+                expected_sha256=checkpoint_sha256,
             )
             if result.status is CheckpointStatus.RESTORED:
                 if result.state_dict is None:

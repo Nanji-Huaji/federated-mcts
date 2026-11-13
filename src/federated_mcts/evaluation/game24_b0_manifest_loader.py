@@ -25,6 +25,7 @@ from federated_mcts.evaluation.game24_manifest import (
     _DECISION_FIELDS,
     _RUN_FIELDS,
     _compute_fingerprint,
+    manifest_field_sets,
 )
 
 
@@ -51,8 +52,7 @@ def _dict_to_canonical_subset(
         if name == "remote_nondeterminism_notice":
             d[name] = True
         elif name == "schema_version":
-            from federated_mcts.evaluation.game24_manifest import SCHEMA_VERSION
-            d[name] = SCHEMA_VERSION
+            d[name] = source.get("schema_version", 1)
         else:
             if name not in source:
                 raise ValueError(
@@ -81,8 +81,23 @@ def derive_fingerprints_from_manifest_dict(
     Unknown keys are ignored; missing required fields in *field_set*
     raise ``ValueError`` (fail-closed).
     """
-    decision_dict = _dict_to_canonical_subset(manifest, _DECISION_FIELDS)
-    run_dict = _dict_to_canonical_subset(manifest, _RUN_FIELDS)
+    version = manifest.get("schema_version", 1)
+    if type(version) is not int:
+        raise ValueError("Manifest schema_version must be an integer")
+    decision_fields, run_fields = manifest_field_sets(version)
+    if version == 2:
+        from federated_mcts.config import DecisionSpec
+        spec = DecisionSpec.validate_identity(manifest.get("decision_spec"))
+        for name in set(spec) & _DECISION_FIELDS:
+            expected = spec[name]
+            if name == "seed" and expected is None:
+                expected = 0
+            if manifest.get(name) != expected:
+                raise ValueError(f"Manifest projection disagrees with DecisionSpec: {name}")
+    elif "decision_spec" in manifest:
+        raise ValueError("Version-1 evidence cannot contain a decision_spec")
+    decision_dict = _dict_to_canonical_subset(manifest, decision_fields)
+    run_dict = _dict_to_canonical_subset(manifest, run_fields)
     dp_fp = _compute_fingerprint(decision_dict)
     run_fp = _compute_fingerprint(run_dict)
     return dp_fp, run_fp
@@ -120,6 +135,8 @@ class B0SourceDecisionIdentity:
     max_cost_usd: float | None
     max_raw_unit_limit: float
     runner_path: str
+    schema_version: int = 1
+    decision_spec: dict | None = None
 
 
 def extract_source_decision_identity(
@@ -181,6 +198,13 @@ def extract_source_decision_identity(
             f"B0 manifest model_names must be list, got {type(model_names_raw).__name__}"
         )
     model_names: list[str] = [str(n) for n in model_names_raw]
+    version = manifest.get("schema_version", 1)
+    if type(version) is not int:
+        raise ValueError("Manifest schema_version must be an integer")
+    manifest_field_sets(version)
+    decision_spec = manifest.get("decision_spec")
+    if decision_spec is not None and not isinstance(decision_spec, dict):
+        raise ValueError("Manifest decision_spec must be an object")
 
     return B0SourceDecisionIdentity(
         model_config_sha256=_s("model_config_sha256"),
@@ -201,4 +225,6 @@ def extract_source_decision_identity(
         max_cost_usd=_opt_f("max_cost_usd"),
         max_raw_unit_limit=_f("max_raw_unit_limit"),
         runner_path=_s("runner_path"),
+        schema_version=version,
+        decision_spec=decision_spec,
     )

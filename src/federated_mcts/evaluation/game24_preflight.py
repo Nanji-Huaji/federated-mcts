@@ -2,8 +2,7 @@
 
 Computes a worst-case raw-unit cost estimate before any model calls
 are made, using rates from the model configuration and the runner's
-configured solver limits, and gates full 200-ID validation at 0.75
-raw units.
+configured solver limits, and gates full 200-ID validation at 20 raw units.
 
 Also integrates actual raw-unit spending reconciliation with the
 ``BudgetLedger`` after task usage deltas.
@@ -20,25 +19,25 @@ from dataclasses import dataclass
 SCHEMA_VERSION: int = 1
 """Preflight projection schema version."""
 
-# ── Model rate constants (raw-units per 1M tokens) ──
-# These are the canonical rates from model_config_vllm.json projects.
-# Raw-unit is the sum of prompt and completion cost in the project's
-# dollar-denominated pricing (no currency conversion).
-_MODEL_RATES: dict[str, dict[str, float]] = {
-    "deepseek-v4-flash": {"prompt": 0.14, "completion": 0.28},
-    "deepseek-v4-pro": {"prompt": 0.435, "completion": 0.87},
-    "Qwen/Qwen2.5-32B-Instruct": {"prompt": 0.0, "completion": 0.0},
-    "gpt-4o": {"prompt": 2.5, "completion": 10.0},
-    "gpt-4o-2024-08-06": {"prompt": 2.5, "completion": 10.0},
-    "gpt-4": {"prompt": 15.0, "completion": 30.0},
-    "gpt-3.5-turbo": {"prompt": 0.75, "completion": 1.5},
-}
+from federated_mcts.models.rates import DEFAULT_RATE_CARD
 
-PILOT_PROJECTION_GATE: float = 0.75
-"""Maximum projected raw units for the 20-ID validation pilot."""
+PILOT_PROJECTION_GATE: float = 20.0
+"""Maximum projected raw units for the 20-ID validation pilot.
 
-FULL_VALIDATION_GATE: float = 0.75
-"""Maximum projected raw units for full 200-ID validation."""
+Re-baselined from 0.75 on 2026-08-10.  The previous value was inherited from the
+``deepseek-v3`` series.  That endpoint is retired; the remaining endpoints
+(``deepseek-flash``, ``deepseek-v4-pro``) are reasoning models that spend
+~28,400 reasoning tokens before emitting Game24 proposal text, so the measured
+per-task cost is ~0.0995 raw units rather than the historical ~0.0027.
+See ``.omo/evidence/b0-gate-rebaseline-rationale.md``.
+"""
+
+FULL_VALIDATION_GATE: float = 20.0
+"""Maximum projected raw units for full 200-ID validation.
+
+Re-baselined from 0.75 together with ``PILOT_PROJECTION_GATE``; a 200-task run
+projects to ~19.91 raw units under the measured reasoning-model cost.
+"""
 
 
 @dataclass(frozen=True, slots=True)
@@ -81,7 +80,8 @@ def get_model_rate(model_name: str) -> dict[str, float] | None:
 
     Returns ``None`` for unknown models (fail-closed: no invented fallback).
     """
-    return _MODEL_RATES.get(model_name)
+    rate = DEFAULT_RATE_CARD.rates.get(model_name)
+    return None if rate is None else {"prompt": float(rate.prompt), "completion": float(rate.completion)}
 
 
 def build_projection(
@@ -153,14 +153,14 @@ def build_projection(
         rate_prompt = 0.0
         rate_completion = 0.0
     else:
-        known_rate = _MODEL_RATES.get(remote_model)
+        known_rate = get_model_rate(remote_model)
         if known_rate is None:
             # Unknown remote model — fail closed unless zero-cost
             is_zero_cost = remote_model in {"Qwen/Qwen2.5-32B-Instruct"}
             if not is_zero_cost:
                 raise ValueError(
                     f"Unknown remote model {remote_model!r} has no rate configured. "
-                    f"Known rates: {sorted(_MODEL_RATES.keys())}. "
+                    f"Known rates: {sorted(DEFAULT_RATE_CARD.rates)}. "
                     "Add rate or use a known model."
                 )
             known_rate = {"prompt": 0.0, "completion": 0.0}

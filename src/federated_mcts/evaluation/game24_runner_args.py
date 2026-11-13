@@ -14,8 +14,8 @@ from federated_mcts.evaluation.game24_b0_gate import add_b0_cli_args
 __all__ = ["parse_args"]
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(prog="fmcts-run", description="Run federated search experiments")
     parser.add_argument("--localbackend", type=str, default="bartowski/Phi-3-medium-128k-instruct-GGUF")
     parser.add_argument("--remotebackend", type=str, default="qwen2.5-32b-instruct")
     parser.add_argument("--temperature", type=float, default=0.9)
@@ -70,4 +70,4 @@ def parse_args():
         "--resume", action="store_true", default=False,
         help="resume from an existing journal if manifest fingerprint matches",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)

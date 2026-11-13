@@ -215,8 +215,12 @@ def check_final_result(last_line: str, pre_line: str = "", x: str = "") -> Tuple
     # Sort and form the new left numbers
     new_left_num = sorted(pre_left_list, key=int)
     
-    # Check if last_left_num matches the expected new_left_num
-    if new_left_num != last_left_num:
+    # Check if last_left_num matches the expected new_left_num.
+    # The remain-set is a multiset, so its printed order carries no meaning:
+    # compare by value multiset rather than by raw string-sequence equality.
+    # (Comparing `new_left_num != last_left_num` rejected every arithmetically
+    # correct step whose remain-set was not printed in ascending order.)
+    if sorted(last_left_num, key=int) != new_left_num:
         return False, last_line
     if ',' in ' '.join(last_left_num) or false_result:
         #print("The left part is incorrect. Fixing the left part.")

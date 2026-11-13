@@ -107,8 +107,17 @@ def _create_completion(
     max_tokens: int,
     n: int,
     stop: object | None = None,
+    enable_thinking: bool | None = None,
 ) -> _CompletionResponse:
-    """Thin adapter: ``openai.ChatCompletion.create()`` with per-call config."""
+    """Thin adapter: ``openai.ChatCompletion.create()`` with per-call config.
+
+    ``enable_thinking`` is only injected into the request body when explicitly
+    set, so omitting it leaves the body byte-identical for every endpoint that
+    does not use the flag.
+    """
+    extra: dict[str, object] = {}
+    if enable_thinking is not None:
+        extra["enable_thinking"] = enable_thinking
     return openai.ChatCompletion.create(
         model=model,
         messages=messages,
@@ -118,16 +127,44 @@ def _create_completion(
         stop=stop,
         api_base=client.base_url,
         api_key=client.api_key,
+        **extra,
     )
 
 
 # ── Response helpers (0.28 dict + object compatible) ───────────────────
 
 
+def _message_field(msg_raw: object, field: str) -> str:
+    """Read one string field from a message, tolerating dict/object access.
+
+    Returns ``""`` for missing or ``None`` values so callers never receive the
+    literal string ``"None"``.
+    """
+    if isinstance(msg_raw, dict):
+        value: object = msg_raw.get(field, "")
+    else:
+        value = getattr(msg_raw, field, "")
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
 def _extract_content(choice: object) -> str:
-    """Extract ``message.content`` from a 0.28 response choice.
+    """Extract the model's answer text from a 0.28 response choice.
 
     Supports both ``OpenAIObject`` attribute access and plain dict access.
+
+    Reasoning endpoints (``deepseek-flash``, ``deepseek-v4-pro``) stream their
+    deliberation separately in ``message.reasoning_content`` and only populate
+    ``message.content`` if the budget survives the reasoning phase.  When
+    ``content`` is empty we fall back to the reasoning stream rather than
+    returning ``""``: dropping it makes every such call look like an
+    ``empty_content`` parse failure and yields a fabricated 0% accuracy.
+
+    ``content`` always wins when non-empty, so models that populate it normally
+    are unaffected.
     """
     if isinstance(choice, dict):
         msg_raw: object = choice.get("message", None)
@@ -135,13 +172,10 @@ def _extract_content(choice: object) -> str:
         msg_raw = getattr(choice, "message", None)
     if msg_raw is None:
         return ""
-    if isinstance(msg_raw, dict):
-        content_raw: object = msg_raw.get("content", "")
-    else:
-        content_raw = getattr(msg_raw, "content", "")
-    if isinstance(content_raw, str):
-        return content_raw
-    return str(content_raw)
+    content = _message_field(msg_raw, "content")
+    if content:
+        return content
+    return _message_field(msg_raw, "reasoning_content")
 
 
 def _to_int(value: object) -> int:
@@ -189,6 +223,7 @@ def gpt(
     api_key: str | None = None,
     get_logprobs: bool = False,
     top_logprobs: int = 0,
+    enable_thinking: bool | None = None,
 ) -> list[str]:
     """Convenience wrapper: wraps a single user prompt into a chat message."""
     messages = [{"role": "user", "content": prompt}]
@@ -202,6 +237,7 @@ def gpt(
         stop=stop,
         api_base=api_base,
         api_key=api_key,
+        enable_thinking=enable_thinking,
     )
 
 
@@ -215,17 +251,32 @@ def chatgpt(
     stop: object | None = None,
     api_base: str | None = None,
     api_key: str | None = None,
+    enable_thinking: bool | None = None,
 ) -> list[str]:
     """Send a chat-completion request via the 0.28 module-level API.
 
-    DeepSeek v4 models enforce ``max_choices=1`` and split ``n > 1``
-    into individual ``ChatCompletion.create`` calls.
+    Some families enforce ``max_choices=1`` and split ``n > 1`` into individual
+    ``ChatCompletion.create`` calls:
+
+    - ``deepseek-v4-*`` enforces ``max_choices=1`` unconditionally.
+    - ``qwen3*`` models run with thinking enabled by default, where the gateway
+      rejects batched requests outright:
+      ``The n parameter must be 1 when enable_thinking is true``.
+      Passing ``enable_thinking=False`` lifts that restriction, so batching is
+      restored rather than needlessly serialised.
     """
     client: _ClientConfig = _create_client(api_base=api_base, api_key=api_key)
     usage_tracker = get_usage_tracker()
     outputs: list[str] = []
 
-    max_choices: int = 1 if model.startswith("deepseek-v4-") else 20
+    thinking_off: bool = enable_thinking is False
+    single_choice_only: bool = model.startswith("deepseek-v4-") or (
+        model.startswith("qwen3") and not thinking_off
+    )
+    max_choices: int = 1 if single_choice_only else 20
+    thinking_kwargs: dict[str, bool] = (
+        {} if enable_thinking is None else {"enable_thinking": enable_thinking}
+    )
     remaining: int = n
     while remaining > 0:
         cnt: int = min(remaining, max_choices)
@@ -238,6 +289,7 @@ def chatgpt(
             max_tokens=max_tokens,
             n=cnt,
             stop=stop,
+            **thinking_kwargs,
         )
         outputs.extend(_extract_content(choice) for choice in res.choices)
 

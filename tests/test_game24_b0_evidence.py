@@ -24,7 +24,6 @@ from decimal import Decimal
 sys.path.insert(0, "src")
 
 from federated_mcts.evaluation.game24_b0_evidence import (
-    B0_EXPECTED_SPENT,
     CANONICAL_PILOT_IDS,
     RAW_UNIT_PRECISION,
     extract_model_usage_from_performance,
@@ -70,7 +69,7 @@ def _mf(**kw) -> dict:
         "split_file_sha256": "a" * 64,
         "ordered_task_ids_sha256": "b" * 64,
         "model_config_sha256": "c" * 64,
-        "model_names": ["deepseek-v4-flash"],
+        "model_names": ["qwen3.7-plus"],
         # ── Git metadata ──────────────────────────────────
         "git_commit": "0000000",
         "worktree_dirty": False,
@@ -86,15 +85,15 @@ def _derive_fps(mf_dict: dict) -> tuple[str, str]:
 def _pf(run_fp: str, dp_fp: str, **kw) -> dict:
     d: dict = {
         "acc": 0.0, "avg_sum": 0.0,
-        "llm": "deepseek-v4-flash",
-        "deepseek-v4-flash": {
-            "total_calls": 160, "prompt_tokens": 64960,
-            "completion_tokens": 81919, "total_tokens": 146879,
-            "cost": 0.03203172,
+        "llm": "qwen3.7-plus",
+        "qwen3.7-plus": {
+            "total_calls": 165, "prompt_tokens": 85992,
+            "completion_tokens": 84054, "total_tokens": 170046,
+            "cost": 0.1688832,
         },
-        "estimated_cost_usd": 0.03203172,
-        "budget_spent": 0.03203172,
-        "budget_remaining": 19.95796828,
+        "estimated_cost_usd": 0.1688832,
+        "budget_spent": 0.1688832,
+        "budget_remaining": 19.8235328,
         "complete": True, "run_fingerprint": run_fp,
         "decision_policy_fingerprint": dp_fp,
     }
@@ -110,7 +109,7 @@ def _jf(run_fp: str, task_ids: list[int] | None = None) -> dict:
     return j
 
 
-def _bf(spent=0.03203172, limit=19.99) -> list[dict]:
+def _bf(spent=0.1688832, limit=19.99) -> list[dict]:
     import hashlib
 
     def sh(obj):
@@ -165,7 +164,8 @@ class TestB0ValidEvidence(unittest.TestCase):
                  jf=_jf(run_fp), bf=_bf())
         ev = validate_b0_evidence(**{f"{k}_path": v for k, v in ps.items()})
         self.assertEqual(ev.pilot_id_count, 20)
-        self.assertEqual(ev.raw_units_spent, B0_EXPECTED_SPENT)
+        # raw_units_spent is sourced from the hash-chained ledger, not from a pin.
+        self.assertEqual(ev.raw_units_spent, Decimal("0.1688832"))
         self.assertTrue(ev.manifest_sha256)
 
     def test_validation_creates_no_files(self):
@@ -334,7 +334,7 @@ class TestB0Errors(unittest.TestCase):
         mf = _mf()
         dp_fp, run_fp = _derive_fps(mf)
         pf = _pf(run_fp, dp_fp)
-        pf["deepseek-v4-flash"]["total_calls"] = float("nan")
+        pf["qwen3.7-plus"]["total_calls"] = float("nan")
         ps = _wr(self.tmp, mf=mf, pf=pf,
                  jf=_jf(run_fp), bf=_bf())
         with self.assertRaises(ValueError):
@@ -344,7 +344,7 @@ class TestB0Errors(unittest.TestCase):
         mf = _mf()
         dp_fp, run_fp = _derive_fps(mf)
         pf = _pf(run_fp, dp_fp)
-        pf["deepseek-v4-flash"]["total_tokens"] = float("inf")
+        pf["qwen3.7-plus"]["total_tokens"] = float("inf")
         ps = _wr(self.tmp, mf=mf, pf=pf,
                  jf=_jf(run_fp), bf=_bf())
         with self.assertRaises(ValueError):
@@ -354,7 +354,7 @@ class TestB0Errors(unittest.TestCase):
         mf = _mf()
         dp_fp, run_fp = _derive_fps(mf)
         pf = _pf(run_fp, dp_fp)
-        pf["deepseek-v4-flash"]["total_calls"] = -5
+        pf["qwen3.7-plus"]["total_calls"] = -5
         ps = _wr(self.tmp, mf=mf, pf=pf,
                  jf=_jf(run_fp), bf=_bf())
         with self.assertRaises(ValueError):
@@ -386,7 +386,7 @@ class TestB0Errors(unittest.TestCase):
         mf = _mf()
         dp_fp, run_fp = _derive_fps(mf)
         pf = _pf(run_fp, dp_fp)
-        del pf["deepseek-v4-flash"]
+        del pf["qwen3.7-plus"]
         ps = _wr(self.tmp, mf=mf, pf=pf,
                  jf=_jf(run_fp), bf=_bf())
         with self.assertRaises(ValueError):
@@ -396,7 +396,7 @@ class TestB0Errors(unittest.TestCase):
         mf = _mf()
         dp_fp, run_fp = _derive_fps(mf)
         pf = _pf(run_fp, dp_fp)
-        pf["deepseek-v4-flash"] = "not a dict"
+        pf["qwen3.7-plus"] = "not a dict"
         ps = _wr(self.tmp, mf=mf, pf=pf,
                  jf=_jf(run_fp), bf=_bf())
         with self.assertRaises(ValueError):
@@ -417,7 +417,7 @@ class TestB0Errors(unittest.TestCase):
         mf = _mf()
         dp_fp, run_fp = _derive_fps(mf)
         pf = _pf(run_fp, dp_fp)
-        pf["deepseek-v4-flash"]["total_tokens"] = 999
+        pf["qwen3.7-plus"]["total_tokens"] = 999
         ps = _wr(self.tmp, mf=mf, pf=pf,
                  jf=_jf(run_fp), bf=_bf())
         with self.assertRaises(ValueError):
@@ -427,7 +427,7 @@ class TestB0Errors(unittest.TestCase):
         mf = _mf()
         dp_fp, run_fp = _derive_fps(mf)
         pf = _pf(run_fp, dp_fp)
-        del pf["deepseek-v4-flash"]["completion_tokens"]
+        del pf["qwen3.7-plus"]["completion_tokens"]
         ps = _wr(self.tmp, mf=mf, pf=pf,
                  jf=_jf(run_fp), bf=_bf())
         with self.assertRaises(ValueError):
@@ -437,7 +437,7 @@ class TestB0Errors(unittest.TestCase):
         mf = _mf()
         dp_fp, run_fp = _derive_fps(mf)
         pf = _pf(run_fp, dp_fp)
-        pf["deepseek-v4-flash"]["prompt_tokens"] = True
+        pf["qwen3.7-plus"]["prompt_tokens"] = True
         ps = _wr(self.tmp, mf=mf, pf=pf,
                  jf=_jf(run_fp), bf=_bf())
         with self.assertRaises(ValueError):
@@ -566,38 +566,49 @@ class TestExtractModelUsageFromPerformance(unittest.TestCase):
         self.assertEqual(usage["total_calls"], 160)
 
 
-# ── Tests for RAW_UNIT_PRECISION quantization — boundary and binary-tail ─
+# ── Tests for RAW_UNIT_PRECISION normalization — boundary and binary-tail ─
+#
+# Reconciliation quantizes half-up to raw-unit precision (1e-8): a binary-float
+# representation tail must normalize onto the canonical value, while a genuine
+# one-unit discrepancy (1e-8) must still be detected.
 
 class TestRawUnitPrecisionBoundary(unittest.TestCase):
-    """Given raw-unit Decimals, When quantizing to RAW_UNIT_PRECISION (ROUND_DOWN),
-    Then binary-float tails are absorbed but materially-different values reject."""
+    """Given raw-unit Decimals, When quantizing to RAW_UNIT_PRECISION (ROUND_HALF_UP),
+    Then binary-float tails collapse to one canonical value while values differing
+    by a genuine raw unit stay distinct.
+
+    Self-contained: these exercise the normalization rule itself, so they do not
+    depend on any pinned telemetry constant.
+    """
+
+    CANONICAL = Decimal("0.1688832")
 
     def _q(self, value):
-        from decimal import ROUND_DOWN
-        return value.quantize(RAW_UNIT_PRECISION, rounding=ROUND_DOWN)
+        from decimal import ROUND_HALF_UP
+        return value.quantize(RAW_UNIT_PRECISION, rounding=ROUND_HALF_UP)
 
     def test_exact_value_quantizes_to_self(self):
-        result = self._q(B0_EXPECTED_SPENT)
-        self.assertEqual(result, B0_EXPECTED_SPENT.quantize(RAW_UNIT_PRECISION))
+        result = self._q(self.CANONICAL)
+        self.assertEqual(result, self.CANONICAL.quantize(RAW_UNIT_PRECISION))
 
     def test_binary_tail_passes(self):
-        noisy = Decimal("0.032031720000000014")
-        canonical = self._q(B0_EXPECTED_SPENT)
+        noisy = Decimal("0.168883200000000014")
+        canonical = self._q(self.CANONICAL)
         self.assertEqual(self._q(noisy), canonical)
 
     def test_binary_tail_greater_passes(self):
-        noisy = Decimal("0.03203172000000001")
-        canonical = self._q(B0_EXPECTED_SPENT)
+        noisy = Decimal("0.16888320000000001")
+        canonical = self._q(self.CANONICAL)
         self.assertEqual(self._q(noisy), canonical)
 
-    def test_one_unit_less_rejects(self):
-        wrong = Decimal("0.03203171")
-        canonical = self._q(B0_EXPECTED_SPENT)
+    def test_one_unit_less_is_distinct(self):
+        wrong = Decimal("0.16888319")
+        canonical = self._q(self.CANONICAL)
         self.assertNotEqual(self._q(wrong), canonical)
 
-    def test_one_unit_more_rejects(self):
-        wrong = Decimal("0.03203173")
-        canonical = self._q(B0_EXPECTED_SPENT)
+    def test_one_unit_more_is_distinct(self):
+        wrong = Decimal("0.16888321")
+        canonical = self._q(self.CANONICAL)
         self.assertNotEqual(self._q(wrong), canonical)
 
 
@@ -615,7 +626,7 @@ class TestBudgetLedgerBinaryTail(unittest.TestCase):
         import shutil
         shutil.rmtree(self.tmp, ignore_errors=True)
 
-    def _write_budget(self, spent_amount=0.03203172, limit=19.99) -> str:
+    def _write_budget(self, spent_amount=0.1688832, limit=19.99) -> str:
         import hashlib
 
         def sh(obj):
@@ -638,22 +649,150 @@ class TestBudgetLedgerBinaryTail(unittest.TestCase):
         return budget_path
 
     def test_binary_tail_ledger_verifies(self):
-        """verify_budget_ledger accepts binary-tail float from ledger."""
-        from decimal import ROUND_DOWN
+        """verify_budget_ledger normalizes a binary-tail float from the ledger."""
+        from decimal import ROUND_HALF_UP
         from federated_mcts.evaluation.game24_b0_verify import verify_budget_ledger
 
         budget_path = self._write_budget()
         spent = verify_budget_ledger(budget_path)
-        expected = B0_EXPECTED_SPENT.quantize(RAW_UNIT_PRECISION, rounding=ROUND_DOWN)
+        expected = Decimal("0.1688832").quantize(
+            RAW_UNIT_PRECISION, rounding=ROUND_HALF_UP
+        )
         self.assertEqual(spent, expected)
 
-    def test_materially_different_amount_rejects(self):
-        """A budget with 0.03203173 must reject even after quantization."""
+    def test_different_legitimate_spend_is_accepted(self):
+        """A different-but-legitimate spend must NOT be rejected.
+
+        Spend is a sampling outcome.  Two identical pilots produced 0.16646720
+        and 0.16888320; both are genuine `complete` runs, so neither may be
+        rejected on the strength of its total alone.
+        """
         from federated_mcts.evaluation.game24_b0_verify import verify_budget_ledger
 
-        budget_path = self._write_budget(spent_amount=0.03203173)
-        with self.assertRaises(ValueError):
+        budget_path = self._write_budget(spent_amount=0.16646720)
+        spent = verify_budget_ledger(budget_path)
+        self.assertEqual(spent, Decimal("0.16646720"))
+
+    def test_hash_chain_break_still_rejects(self):
+        """Removing the numeric pins must not weaken hash-chain enforcement."""
+        from federated_mcts.evaluation.game24_b0_verify import verify_budget_ledger
+
+        budget_path = self._write_budget()
+        with open(budget_path) as f:
+            lines = f.read().splitlines()
+        # Corrupt the recorded amount without recomputing entry_hash.
+        broken = json.loads(lines[1])
+        broken["amount"] = 0.00000001
+        lines[1] = json.dumps(broken, sort_keys=True, separators=(",", ":"))
+        with open(budget_path, "w") as f:
+            f.write("\n".join(lines) + "\n")
+
+        with self.assertRaises(ValueError) as ctx:
             verify_budget_ledger(budget_path)
+        self.assertIn("hash chain", str(ctx.exception).lower())
+
+
+class TestLegitimateReRunAccepted(unittest.TestCase):
+    """The central regression: an identical-but-re-sampled pilot must validate.
+
+    Before this change the four resource fields and the spend total were compared
+    for exact equality against one recorded run, so any legitimate re-run failed.
+    Resource totals are LLM-sampling outcomes; two identical pilots produced
+    163 vs 165 calls and 0.16646720 vs 0.16888320 raw units.
+    """
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _run_with(self, calls, prompt, completion, cost, spent):
+        mf = _mf()
+        dp_fp, run_fp = _derive_fps(mf)
+        pf = _pf(run_fp, dp_fp)
+        # Model telemetry lives under the model-name key, so build it explicitly
+        # rather than through _pf's top-level kw merge.
+        pf["qwen3.7-plus"] = {
+            "total_calls": calls,
+            "prompt_tokens": prompt,
+            "completion_tokens": completion,
+            "total_tokens": prompt + completion,
+            "cost": cost,
+        }
+        pf["estimated_cost_usd"] = cost
+        pf["budget_spent"] = cost
+        ps = _wr(self.tmp, mf=mf, pf=pf, jf=_jf(run_fp), bf=_bf(spent=spent))
+        return validate_b0_evidence(**{f"{k}_path": v for k, v in ps.items()})
+
+    def test_re_sampled_pilot_with_different_totals_validates(self):
+        """pilot6-shaped telemetry must validate even though pins came from pilot7."""
+        ev = self._run_with(
+            calls=163, prompt=85204, completion=82741,
+            cost=0.16646720, spent=0.16646720,
+        )
+        self.assertEqual(ev.calls, 163)
+        self.assertEqual(ev.total_tokens, 167945)
+        self.assertEqual(ev.raw_units_spent, Decimal("0.16646720"))
+
+    def test_grossly_different_spend_does_not_break_projection(self):
+        """A much larger legitimate spend flows through to the projection value."""
+        ev = self._run_with(
+            calls=165, prompt=85992, completion=84054,
+            cost=0.90000000, spent=0.90000000,
+        )
+        self.assertEqual(ev.raw_units_spent, Decimal("0.90000000"))
+
+    def test_token_total_inconsistency_still_rejects(self):
+        """Internal coherence is preserved as a real invariant.
+
+        Enforced both by the usage extractor and by _verify_performance, so this
+        rejects at whichever layer runs first.
+        """
+        mf = _mf()
+        dp_fp, run_fp = _derive_fps(mf)
+        pf = _pf(run_fp, dp_fp)
+        pf["qwen3.7-plus"] = {
+            "total_calls": 1, "prompt_tokens": 100,
+            "completion_tokens": 200, "total_tokens": 999,  # 100+200 != 999
+            "cost": 0.1,
+        }
+        ps = _wr(self.tmp, mf=mf, pf=pf, jf=_jf(run_fp), bf=_bf(spent=0.1))
+        with self.assertRaises(ValueError) as ctx:
+            validate_b0_evidence(**{f"{k}_path": v for k, v in ps.items()})
+        msg = str(ctx.exception).lower()
+        self.assertTrue(
+            "inconsistency" in msg or "inconsistent" in msg,
+            f"expected a token-coherence error, got: {msg}",
+        )
+
+    def test_negative_call_count_rejects(self):
+        """Well-formedness is still enforced, so garbage telemetry cannot pass."""
+        mf = _mf()
+        dp_fp, run_fp = _derive_fps(mf)
+        pf = _pf(run_fp, dp_fp)
+        pf["qwen3.7-plus"] = {
+            "total_calls": -5, "prompt_tokens": 100,
+            "completion_tokens": 200, "total_tokens": 300,
+            "cost": 0.1,
+        }
+        ps = _wr(self.tmp, mf=mf, pf=pf, jf=_jf(run_fp), bf=_bf(spent=0.1))
+        with self.assertRaises(ValueError) as ctx:
+            validate_b0_evidence(**{f"{k}_path": v for k, v in ps.items()})
+        self.assertIn("nonnegative", str(ctx.exception).lower())
+
+    def test_wrong_fingerprint_still_rejects(self):
+        """Fingerprint enforcement is untouched by this change."""
+        mf = _mf()
+        dp_fp, run_fp = _derive_fps(mf)
+        ps = _wr(
+            self.tmp, mf=mf,
+            pf=_pf(run_fp="c" * 64, dp_fp=dp_fp),
+            jf=_jf(run_fp), bf=_bf(),
+        )
+        with self.assertRaises(ValueError):
+            validate_b0_evidence(**{f"{k}_path": v for k, v in ps.items()})
 
 
 if __name__ == "__main__":

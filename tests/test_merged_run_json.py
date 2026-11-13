@@ -1,145 +1,133 @@
-"""Regression test: merged_run.run must reach json.dump without UnboundLocalError
-when --task_split is omitted."""
+"""Regression: a run without ``--task_split`` must complete, not crash.
 
-import ast
+The retired ``scripts/merged_run.py`` had a function-local ``import json`` that
+shadowed the module-level import, so a run without ``--task_split`` raised
+``UnboundLocalError`` at the first output write.  This test drives the
+canonical CLI itself and asserts the no-split path exits cleanly without
+writing anything.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import json
+import os
+import subprocess
 import sys
-import textwrap
+import tempfile
 import unittest
+from pathlib import Path
 
-sys.path.insert(0, 'src')
+sys.path.insert(0, "src")
+
+from federated_mcts.cli import run_main
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
-class TestMergedRunJsonNoTaskSplit(unittest.TestCase):
-    """Prove merged_run.run reaches json.dump when task_split is None."""
+_MODEL_CONFIG = [
+    {
+        "client_name": "local_client",
+        "model": "Qwen/Qwen2.5-32B-Instruct",
+        "max_tokens": 256,
+        "api_key": "test-key",
+        "api_base": "http://127.0.0.1:9/v1",
+    },
+    {
+        "client_name": "remote_client",
+        "model": "deepseek-v4-flash",
+        "max_tokens": 512,
+        "api_key": "test-key",
+        "api_base": "http://127.0.0.1:9/v1",
+    },
+]
 
-    SCRIPT_PATH = '/home/tiantianyi/code/federated-mcts/scripts/merged_run.py'
 
-    def test_run_function_has_no_local_import_json_shadowing(self):
-        """The 'run' function must NOT contain a local 'import json' that
-        shadows the module-level import, because when task_split is None
-        the local import never executes and json.dump raises UnboundLocalError."""
+class TestCliWithoutTaskSplit(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmpdir = self._tmp.name
+        self._cwd = os.getcwd()
+        os.chdir(self.tmpdir)
+        os.makedirs("configs")
+        with open("configs/model_config.json", "w", encoding="utf-8") as stream:
+            json.dump(_MODEL_CONFIG, stream)
 
-        with open(self.SCRIPT_PATH) as f:
-            source = f.read()
-        tree = ast.parse(source)
+    def tearDown(self) -> None:
+        os.chdir(self._cwd)
+        self._tmp.cleanup()
 
-        # Find the 'run' function definition
-        run_func = None
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == 'run':
-                run_func = node
-                break
+    def test_dry_run_without_task_split_exits_zero(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            exit_code = run_main(
+                [
+                    "--task",
+                    "blocksworld",
+                    "--task_start_index",
+                    "0",
+                    "--task_end_index",
+                    "2",
+                    "--model_config",
+                    "configs/model_config.json",
+                    "--dry_run",
+                ]
+            )
 
-        self.assertIsNotNone(run_func, "DEFECT: 'run' function not found in script")
+        self.assertEqual(exit_code, 0, output.getvalue())
+        self.assertIn("DRY RUN", output.getvalue())
+        self.assertIn("task IDs (2): [0, 1]", output.getvalue())
 
-        # Walk all nodes inside the run function looking for 'import json'
-        local_imports = []
-        for node in ast.walk(run_func):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name == 'json':
-                        local_imports.append((
-                            node.lineno,
-                            f'import json'
-                        ))
-            elif isinstance(node, ast.ImportFrom):
-                if node.module == 'json':
-                    local_imports.append((
-                        node.lineno,
-                        f'from json import ...'
-                    ))
+    def test_dry_run_without_task_split_writes_nothing(self) -> None:
+        before = sorted(os.listdir("."))
+        with contextlib.redirect_stdout(io.StringIO()):
+            run_main(
+                [
+                    "--task",
+                    "blocksworld",
+                    "--task_start_index",
+                    "0",
+                    "--task_end_index",
+                    "2",
+                    "--model_config",
+                    "configs/model_config.json",
+                    "--dry_run",
+                ]
+            )
+        self.assertEqual(sorted(os.listdir(".")), before)
+        self.assertFalse(os.path.exists("logs"))
 
-        self.assertEqual(
-            len(local_imports), 0,
-            'DEFECT: "import json" found inside run() function at lines '
-            f'{local_imports}. This shadows the module-level import '
-            'and causes UnboundLocalError when task_split is None.'
+    def test_module_entry_point_without_task_split(self) -> None:
+        env = dict(os.environ)
+        env["PYTHONPATH"] = str(ROOT / "src")
+        env["RUN_LIVE_DEEPSEEK_DIAGNOSTIC"] = "0"
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "federated_mcts",
+                "--task",
+                "blocksworld",
+                "--task_start_index",
+                "0",
+                "--task_end_index",
+                "2",
+                "--model_config",
+                "configs/model_config.json",
+                "--dry_run",
+            ],
+            cwd=self.tmpdir,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=180,
         )
-
-    def test_module_level_import_json_exists(self):
-        """merged_run.py must import json at module level (line 2)."""
-
-        with open(self.SCRIPT_PATH) as f:
-            source = f.read()
-        tree = ast.parse(source)
-
-        found = False
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name == 'json':
-                        found = True
-                        break
-            if found:
-                break
-
-        self.assertTrue(found, 'DEFECT: module-level "import json" not found')
-
-    def test_run_without_task_split_compiles_without_unbound_error(self):
-        """Simulate: if task_split is None, the json reference in run() must
-        resolve from the module scope (not from an unexecuted local import)."""
-        with open(self.SCRIPT_PATH) as f:
-            source = f.read()
-
-        # Remove the shebang / anything before the import so we can exec in
-        # a controlled scope.
-        tree = ast.parse(source)
-
-        # Extract the run function source lines
-        run_func = None
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == 'run':
-                run_func = node
-                break
-
-        self.assertIsNotNone(run_func)
-
-        # Build a minimal compile scope: module-level json, no task_split shadowing
-        ns = {}
-        import json as _json_mod  # noqa: F811
-        ns['json'] = _json_mod
-
-        # We do NOT add a function-local json; we compile and exec
-        # just the run function body in the namespace with json.
-        # Wrap it in a dummy def so we can exec it.
-        run_source = ast.get_source_segment(source, run_func)
-        self.assertIsNotNone(run_source)
-
-        wrapper = (
-            'def run(args, solve_function):\n' +
-            textwrap.indent(run_source, '    ')
-        )
-
-        try:
-            exec(wrapper, ns)
-        except Exception as e:
-            # The code won't run (missing federated_mcts imports), but
-            # the compilation must not fail with a parse error.
-            # The important thing: the function is created and json
-            # resolves to the module-level json, not UnboundLocalError.
-            pass
-
-        # The real proof: compile the code and check there's no
-        # local 'json' variable binding that would shadow.
-        code_obj = compile(wrapper, '<test>', 'exec')
-        # If we got here without SyntaxError, the function definition compiled.
-        self.assertIsNotNone(code_obj)
-
-        # Now try calling the run function with a mock that triggers
-        # code path WITHOUT task_split. If json were local (shadowed),
-        # the compiler would emit LOAD_FAST for json, not LOAD_GLOBAL.
-        # Let's check: if the run function body references 'json',
-        # it must come from the global scope.
-        run_bytecode_ns = {}
-        exec(wrapper, run_bytecode_ns)
-        run_fn = run_bytecode_ns.get('run')
-        if run_fn is not None:
-            # Check that 'json' is not in the function's local variables
-            # (it should be accessed via LOAD_GLOBAL, not LOAD_FAST/LOAD_DEREF)
-            self.assertNotIn('json', run_fn.__code__.co_varnames,
-                'DEFECT: "json" is a local variable in run(), '
-                'indicating a function-local import shadows the module-level import')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("DRY RUN", result.stdout)
+        self.assertIn("task IDs (2): [0, 1]", result.stdout)
+        self.assertFalse(os.path.exists(os.path.join(self.tmpdir, "logs")))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

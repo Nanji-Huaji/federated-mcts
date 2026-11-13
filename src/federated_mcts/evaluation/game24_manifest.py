@@ -16,6 +16,7 @@ import os
 import random as _random
 import subprocess
 from dataclasses import dataclass, field
+from federated_mcts.config import DecisionSpec
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -68,8 +69,17 @@ _RUN_ONLY_FIELDS = frozenset({
 
 _RUN_FIELDS = _DECISION_FIELDS | _RUN_ONLY_FIELDS
 
-SCHEMA_VERSION: int = 1
-"""Current manifest schema version."""
+SCHEMA_VERSION: int = 2
+"""Schema emitted by the runner; version 1 remains readable without rehashing."""
+
+
+def manifest_field_sets(version: int) -> tuple[frozenset[str], frozenset[str]]:
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError(f"Unsupported manifest schema_version: {version!r}")
+    decision = _DECISION_FIELDS
+    if version == 2:
+        decision = decision | {"decision_spec"}
+    return decision, decision | _RUN_ONLY_FIELDS
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -133,7 +143,29 @@ class Game24Manifest:
     worktree_dirty: bool = field(init=False)
     remote_nondeterminism_notice: bool = field(default=True, init=False)
 
+    # Direct legacy construction remains v1 for evidence tooling. New runs
+    # explicitly supply SCHEMA_VERSION and their resolved DecisionSpec.
+    schema_version: int = 1
+    decision_spec: DecisionSpec | None = None
+
     def __post_init__(self) -> None:
+        manifest_field_sets(self.schema_version)
+        if self.schema_version == 2:
+            spec = DecisionSpec.validate_identity(
+                self.decision_spec.identity() if isinstance(self.decision_spec, DecisionSpec)
+                else self.decision_spec)
+            # The legacy projections in v2 artifacts must agree with execution.
+            for name in ("seed", "temperature", "method_generate", "method_evaluate",
+                         "method_select", "n_generate_sample", "n_evaluate_sample",
+                         "n_select_sample", "game24_exact_prune", "assign_strategy"):
+                expected = spec[name]
+                if name == "seed" and expected is None:
+                    expected = 0  # v1 projection; v2 retains None in decision_spec
+                if getattr(self, name) != expected:
+                    raise ValueError(f"Manifest projection disagrees with DecisionSpec: {name}")
+            _freeze_set(self, "decision_spec", DecisionSpec(**spec))
+        elif self.decision_spec is not None:
+            raise ValueError("Version-1 manifests cannot contain a decision_spec")
         # Compute hashes from raw inputs
         split_sha = _hash_bytes(
             _canonical_json_bytes(
@@ -169,7 +201,7 @@ class Game24Manifest:
         that differ only in audit/observation fields share this value.
         """
         return _compute_fingerprint(
-            self._to_canonical_dict(_DECISION_FIELDS)
+            self._to_canonical_dict(manifest_field_sets(self.schema_version)[0])
         )
 
     @property
@@ -181,7 +213,7 @@ class Game24Manifest:
         ``decision_policy_fingerprint``.
         """
         return _compute_fingerprint(
-            self._to_canonical_dict(_RUN_FIELDS)
+            self._to_canonical_dict(manifest_field_sets(self.schema_version)[1])
         )
 
     # ── Serialization helpers ────────────────────────────────────
@@ -194,18 +226,20 @@ class Game24Manifest:
                 d[name] = True  # constant
             elif hasattr(self, name):
                 val = getattr(self, name)
+                if isinstance(val, DecisionSpec):
+                    val = val.identity()
                 # Force list fields to be comparable (sorted)
                 if isinstance(val, list):
                     val = sorted(val) if name != "task_ids" else val
                 d[name] = val
         # Add fixed schema version
         if "schema_version" in field_set:
-            d["schema_version"] = SCHEMA_VERSION
+            d["schema_version"] = self.schema_version
         return d
 
     def to_json(self) -> str:
         """Full manifest as JSON (secrets stripped)."""
-        d = self._to_canonical_dict(_RUN_FIELDS)
+        d = self._to_canonical_dict(manifest_field_sets(self.schema_version)[1])
         return _canonical_json_bytes(d).decode()
 
 
@@ -284,6 +318,8 @@ def _freeze_set(obj: object, name: str, value: object) -> None:
 
 
 def _load_split_json(path: str) -> dict:
+    if not path:
+        return {}
     with open(path) as f:
         return json.load(f)
 

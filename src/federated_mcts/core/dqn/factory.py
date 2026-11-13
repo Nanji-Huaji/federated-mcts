@@ -7,13 +7,14 @@ from federated_mcts.core.dqn.controller import BudgetAwareDQNController
 from federated_mcts.core.dqn.session import DqnSearchSession
 
 
-def build_dqn_session(args, *, jsonl_path: str | None = None) -> DqnSearchSession:
+def build_dqn_session(args, *, jsonl_path: str | None = None, evaluator_cache_for=None) -> DqnSearchSession:
     controller = BudgetAwareDQNController(
         state_dim=getattr(args, "dqn_state_dim", 16),
         action_count=ACTION_COUNT,
         epsilon=getattr(args, "dqn_epsilon", 1.0),
         seed=getattr(args, "dqn_seed", getattr(args, "seed", 0)),
         checkpoint_path=getattr(args, "dqn_checkpoint", None),
+        checkpoint_sha256=getattr(args, "dqn_checkpoint_sha256", None),
         capacity=getattr(args, "dqn_capacity", 10000),
     )
     return DqnSearchSession(
@@ -23,4 +24,5 @@ def build_dqn_session(args, *, jsonl_path: str | None = None) -> DqnSearchSessio
         jsonl_path=jsonl_path if jsonl_path is not None else getattr(args, "dqn_jsonl", None),
         oracle_distance_reward_enabled=getattr(args, "dqn_oracle_distance_reward", False),
         oracle_distance_scale=getattr(args, "dqn_oracle_distance_scale", 0.25),
+        evaluator_cache_for=evaluator_cache_for,
     )

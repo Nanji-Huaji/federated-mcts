@@ -4,6 +4,7 @@ from fractions import Fraction
 import sympy
 import pandas as pd
 from federated_mcts.tasks.base import Task, DATA_PATH
+from federated_mcts.core.observation import parse_vote_choice
 
 from federated_mcts.prompts.game24 import *  # type: ignore
 
@@ -39,6 +40,8 @@ class Game24Task(Task):
         super().__init__()
         path = os.path.join(DATA_PATH, "24", file)
         self.data = list(pd.read_csv(path)["Puzzles"])
+        # Legacy attribute kept for compatibility; core.evaluation no longer
+        # reads or writes it (prompt-only keys leaked scores across evaluators).
         self.value_cache = {}
         self.steps = 3
         self.stops = ["\n"] * 4
@@ -146,12 +149,10 @@ class Game24Task(Task):
     def vote_outputs_unwrap(vote_outputs: list, n_candidates: int) -> list:
         vote_results = [0] * n_candidates
         for vote_output in vote_outputs:
-            pattern = r".*best choice is.*?(?<!-)(\d+)"
-            match = re.search(pattern, vote_output, re.DOTALL | re.IGNORECASE)
-            if match:
-                vote = int(match.group(1))
-                if 0 <= vote < n_candidates:
-                    vote_results[vote] += 1
+            choice = parse_vote_choice(vote_output)
+            if choice.matched and choice.vote_index is not None:
+                if 0 <= choice.vote_index < n_candidates:
+                    vote_results[choice.vote_index] += 1
             else:
                 print(f"vote no match: {[vote_output]}")
         return vote_results

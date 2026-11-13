@@ -280,6 +280,80 @@ class TestBudgetIntegrationWithAuth(unittest.TestCase):
         self.assertTrue(os.path.exists(self.ledger_path))
         self.assertTrue(os.path.exists(self.auth_path))
 
+class TestBudgetLedgerExactSum(unittest.TestCase):
+    """Given repeated spends, When summing, Then the decimal sum is exact.
+
+    Raw units are a decimal dimension.  Summing them through binary floats
+    accumulates representation drift: twenty spends whose true sum is
+    0.1688832 accumulate to 0.16888319999999998, which truncation then reads as
+    below the canonical value and makes exact reconciliation against the pinned
+    B0 expected spend impossible.
+    """
+
+    def setUp(self) -> None:
+        self.tmpdir_obj = tempfile.TemporaryDirectory()
+        self.tmpdir = self.tmpdir_obj.name
+        self.ledger_path = os.path.join(self.tmpdir, "budget_ledger.jsonl")
+
+    def tearDown(self) -> None:
+        self.tmpdir_obj.cleanup()
+
+    def test_repeated_spends_yield_exact_decimal_sum(self):
+        """20 x 0.1 must reconcile to exactly 2.0, not 2.0000000000000004."""
+        from federated_mcts.evaluation.game24_budget import BudgetLedger
+        from decimal import Decimal
+
+        ledger = BudgetLedger(self.ledger_path, total_limit=19.99)
+        for _ in range(20):
+            self.assertTrue(ledger.spend(0.1))
+
+        self.assertEqual(
+            ledger.spent_exact, Decimal("2.0"),
+            "DEFECT: decimal raw units accumulated through binary floats drift "
+            "away from the exact recorded sum.",
+        )
+        # The float view is retained for backward compatibility.
+        self.assertAlmostEqual(ledger.spent, 2.0, places=12)
+
+    def test_exact_sum_survives_reload_from_disk(self):
+        """Reloading a ledger must rebuild the same exact sum."""
+        from federated_mcts.evaluation.game24_budget import BudgetLedger
+        from decimal import Decimal
+
+        ledger = BudgetLedger(self.ledger_path, total_limit=19.99)
+        for _ in range(7):
+            ledger.spend(0.0001)
+        expected = Decimal("0.0007")
+        self.assertEqual(ledger.spent_exact, expected)
+
+        reloaded = BudgetLedger(self.ledger_path, total_limit=19.99)
+        self.assertEqual(
+            reloaded.spent_exact, expected,
+            "DEFECT: exact sum must be reconstructed from the ledger entries.",
+        )
+
+    def test_exact_sum_reconciles_against_canonical_spend(self):
+        """The real 20-task spend pattern must reconcile to 0.16888320.
+
+        Note the amounts are chosen so their float shortest-representations equal
+        the intended decimals — which is the property the recorder depends on.
+        The float accumulation of these same amounts drifts to
+        0.16888320000000007, so this test genuinely fails without the exact
+        accumulator.
+        """
+        from federated_mcts.evaluation.game24_budget import BudgetLedger
+        from decimal import Decimal
+
+        # 20 per-task spends summing to the genuine measured pilot total.
+        ledger = BudgetLedger(self.ledger_path, total_limit=19.99)
+        for _ in range(20):
+            self.assertTrue(ledger.spend(0.00844416))
+        self.assertEqual(
+            ledger.spent_exact, Decimal("0.1688832"),
+            "DEFECT: 20 x 0.00844416 must reconcile to the exact decimal total, "
+            "not the drifted float sum 0.16888320000000007.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

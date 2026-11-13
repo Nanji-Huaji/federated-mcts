@@ -12,24 +12,10 @@ from __future__ import annotations
 
 import sys
 import unittest
-from unittest.mock import MagicMock, patch
+from decimal import Decimal
 
-# ── Mock problematic module-level imports before loading game24_runner ──
 sys.path.insert(0, "src")
-
-# federated_mcts.models imports openai — mock it out before the module loads
-_fake_models = MagicMock()
-_fake_cost_limit = MagicMock()
-_fake_cost_limit.cost_exceeded = MagicMock(return_value=False)
-_fake_cost_limit.total_cost_usd = MagicMock(return_value=0.0)
-
-with patch.dict("sys.modules", {
-    "federated_mcts.models": _fake_models,
-    "federated_mcts.utils.cost_limit": _fake_cost_limit,
-}):
-    from federated_mcts.evaluation.game24_runner import (
-        compute_task_raw_unit_cost,
-    )
+from federated_mcts.evaluation.game24_runner import compute_task_raw_unit_cost
 
 
 class TestFirstTaskCharging(unittest.TestCase):
@@ -49,7 +35,7 @@ class TestFirstTaskCharging(unittest.TestCase):
         }
         cost = compute_task_raw_unit_cost(prev, current)
         # deepseek-v4-flash: prompt=0.14, completion=0.28 per 1M tokens
-        expected = (1000 * 0.14 + 500 * 0.28) / 1_000_000
+        expected = Decimal("0.00028")
         self.assertAlmostEqual(cost, expected, places=8)
         self.assertGreater(cost, 0.0)
 
@@ -131,7 +117,7 @@ class TestResumeNoDoubleCharge(unittest.TestCase):
         }
         cost = compute_task_raw_unit_cost(prev_snapshot, after_first_new_task)
         # gpt-4o: prompt=2.5, completion=10.0 per 1M tokens
-        expected = (3000 * 2.5 + 1000 * 10.0) / 1_000_000
+        expected = Decimal("0.0175")
         self.assertAlmostEqual(cost, expected, places=8)
         self.assertGreater(cost, 0.0)
 
@@ -155,7 +141,7 @@ class TestResumeNoDoubleCharge(unittest.TestCase):
             },
         }
         cost2 = compute_task_raw_unit_cost(after_task2, after_task3)
-        expected = ((4500 - 3000) * 2.5 + (1600 - 1000) * 10.0) / 1_000_000
+        expected = Decimal("0.00975")
         self.assertAlmostEqual(cost2, expected, places=8)
         self.assertGreater(cost2, 0.0)
 

@@ -1,16 +1,18 @@
 """B0 evidence sub-verifiers: journal completeness and budget hash-chain.
 
 Extracted from ``game24_b0_validate.py`` to keep each module ≤250 pure LOC.
-Zero side effects; all checks raise ``ValueError`` on failure.
+Verification is genuinely read-only: it never constructs a writable
+``BudgetLedger`` (which would append an ``init`` entry to an empty or corrupt
+file), so a failed check leaves the evidence bytes untouched.
+All checks raise ``ValueError`` on failure.
 """
 
 from __future__ import annotations
 
 import os
-from decimal import ROUND_DOWN, Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from federated_mcts.evaluation.game24_b0_evidence import (
-    B0_EXPECTED_SPENT,
     CANONICAL_PILOT_IDS,
     RAW_UNIT_PRECISION,
 )
@@ -61,27 +63,33 @@ def verify_journal(journal_path: str, run_fingerprint: str) -> set[str]:
 def verify_budget_ledger(budget_path: str) -> Decimal:
     """Validate B0 budget hash chain and spent reconciliation.
 
+    The spent total is read from the hash-chained ledger and checked for
+    finiteness and non-negativity.  It is deliberately NOT compared against a
+    pinned constant: spend is a sampling outcome, so pinning it rejected every
+    legitimate re-run, and the budget ceiling is enforced separately at runtime
+    by ``--max_cost_usd``.  The hash chain — not a numeric pin — is what makes
+    this ledger tamper-evident.
+
     Returns the verified spent amount as Decimal."""
-    from federated_mcts.evaluation.game24_budget import BudgetLedger
+    from federated_mcts.evaluation.game24_budget import (
+        LedgerFormatError,
+        read_verified_ledger,
+    )
 
     if not os.path.exists(budget_path):
         raise ValueError(f"B0 budget file not found: {budget_path}")
 
-    ledger = BudgetLedger(budget_path, total_limit=float(Decimal("19.99")))
-    ok, reason = ledger.verify_chain()
-    if not ok:
-        raise ValueError(f"B0 budget hash chain invalid: {reason}")
+    try:
+        verified = read_verified_ledger(budget_path)
+    except LedgerFormatError as exc:
+        raise ValueError(f"B0 budget hash chain invalid: {exc}") from exc
 
-    spent = Decimal(str(ledger.spent))
+    spent = verified.spent
     if not spent.is_finite():
         raise ValueError(f"B0 budget spent must be finite, got {spent!r}")
     if spent < 0:
         raise ValueError(f"B0 budget spent must be nonnegative, got {spent!r}")
-    spent_norm = spent.quantize(RAW_UNIT_PRECISION, rounding=ROUND_DOWN)
-    expected_norm = B0_EXPECTED_SPENT.quantize(RAW_UNIT_PRECISION, rounding=ROUND_DOWN)
-    if spent_norm != expected_norm:
-        raise ValueError(
-            f"B0 budget spent: expected {B0_EXPECTED_SPENT} (normalized {expected_norm}), "
-            f"got {spent} (normalized {spent_norm})"
-        )
-    return spent_norm
+    # Normalize at raw-unit precision using half-up so a binary-float
+    # representation tail is absorbed rather than read as a real shortfall, and
+    # so the value cross-reconciles exactly against the performance artifact.
+    return spent.quantize(RAW_UNIT_PRECISION, rounding=ROUND_HALF_UP)

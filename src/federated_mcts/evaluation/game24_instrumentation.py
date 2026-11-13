@@ -1,7 +1,17 @@
-"""Passive telemetry recorders for Game24 generation and vote evaluation.
+"""Game24 adapters for the core search-observation seam.
 
-Thread an optional recorder instance through ``get_proposals_with_check``,
-``get_proposals_without_check``, ``get_proposals``, and ``get_votes``.
+The seam itself — typed records, sink protocols, record construction and the
+vote parser — lives in :mod:`federated_mcts.core.observation`, because the
+search primitives must not depend on Game24 evaluation code.  This module is
+the evaluation-side adapter:
+
+* :class:`GenerationRecorder` and :class:`VoteRecorder` are in-memory sinks
+  that satisfy the core protocols;
+* :func:`parse_vote_response` keeps its historical tuple shape while
+  delegating to the single shared parser;
+* the record types are re-exported unchanged so baseline telemetry JSON field
+  names and every existing importer keep working.
+
 When ``recorder=None`` (the default), behaviour is byte-identical to the
 uninstrumented path.  When a recorder is supplied, it captures raw
 completions, parse results, rejection reasons, raw vote text, parsed vote
@@ -13,57 +23,19 @@ All record types are plain ``TypedDict`` so serialisation is trivial.
 
 from __future__ import annotations
 
-import re
-from typing import TypedDict
+from federated_mcts.core.observation import (
+    VOTE_CHOICE_PATTERN,
+    CandidateProposalRecord,
+    GenerationObservationSink,  # noqa: F401  (protocol implemented here)
+    ProposalStepRecord,
+    VoteAggregateRecord,
+    VoteCallRecord,
+    VoteObservationSink,  # noqa: F401  (protocol implemented here)
+    parse_vote_choice,
+)
 
 
-# ── Proposal record ───────────────────────────────────────────────
-
-class CandidateProposalRecord(TypedDict):
-    """One raw proposal line and its processing outcome."""
-
-    depth: int
-    """Search depth (step index)."""
-
-    parent_index: int
-    """Index of the parent ``y`` in the current ``ys`` list."""
-
-    retry_ordinal: int
-    """Which retry loop this call belongs to (0-indexed)."""
-
-    completion_index: int
-    """Index of this completion in the multi-completion response."""
-
-    raw_line: str
-    """Exact line text from the model (may be empty)."""
-
-    is_correct: bool
-    """Outcome of ``process_generate_result`` / format check."""
-
-    updated_text: str
-    """The updated proposal string (or original if rejected)."""
-
-    reason: str
-    """Short rejection reason when ``is_correct`` is False."""
-
-
-# ── Proposal aggregate ────────────────────────────────────────────
-
-class ProposalStepRecord(TypedDict):
-    """Aggregate for one ``get_proposals`` call: raw completions + proposals."""
-
-    depth: int
-    parent_index: int
-    parent_state: str
-    raw_completions: list[str]
-    """Full completion strings returned by the model client."""
-
-    retry_count: int
-    """Total number of API calls in the retry loop."""
-
-    proposals: list[CandidateProposalRecord]
-    """Every line processed (including empty/rejected)."""
-
+# ── Proposal recorder (core sink adapter) ────────────────────────────
 
 class GenerationRecorder:
     """Collects raw proposal events without affecting candidate lists.
@@ -91,50 +63,7 @@ class GenerationRecorder:
         return sum(1 for s in self.steps for p in s["proposals"] if p["is_correct"])
 
 
-# ── Vote record ───────────────────────────────────────────────────
-
-class VoteCallRecord(TypedDict):
-    """One evaluator invocation and its parsed results."""
-
-    call_index: int
-    """0-based index of this call across all vote calls for the step."""
-
-    evaluator_mode: str
-    """``"vote"`` or ``"value"`` (the effective method_evaluate)."""
-
-    evaluator_identity: str
-    """Client identity (e.g. ``"remote_client"``)."""
-
-    raw_output: str
-    """Full raw text from this evaluator call."""
-
-    parsed_index: int | None
-    """Parsed candidate index or ``None`` when unparseable."""
-
-    parse_success: bool
-    """Whether the regex matched a candidate index."""
-
-    failure_reason: str | None
-    """``"no_match"`` or ``"out_of_range"`` when the vote was not counted."""
-
-    in_range: bool
-    """Whether ``parsed_index`` is within the valid candidate range."""
-
-
-class VoteAggregateRecord(TypedDict):
-    """Aggregate for one ``get_votes`` call."""
-
-    depth: int
-    n_candidates: int
-    evaluator_mode: str
-    evaluator_identity: str
-    call_count: int
-    vote_totals: list[int]
-    """Per-candidate final vote counts (identical to the returned list)."""
-
-    calls: list[VoteCallRecord]
-    """Details of every raw evaluator call."""
-
+# ── Vote recorder (core sink adapter) ────────────────────────────────
 
 class VoteRecorder:
     """Collects raw vote events without affecting vote totals.
@@ -169,11 +98,9 @@ class VoteRecorder:
         return result
 
 
-# ── Vote parse helper ─────────────────────────────────────────────
+# ── Vote parse helper (thin adapter over the shared parser) ──────────
 
-_VOTE_PARSE_PATTERN: re.Pattern[str] = re.compile(
-    r".*best choice is.*?(?<!-)(\d+)", re.DOTALL | re.IGNORECASE
-)
+_VOTE_PARSE_PATTERN = VOTE_CHOICE_PATTERN
 
 
 def parse_vote_response(raw: str) -> tuple[int | None, bool, str | None]:
@@ -184,11 +111,10 @@ def parse_vote_response(raw: str) -> tuple[int | None, bool, str | None]:
     or ``None`` otherwise.  Does NOT check whether the index is within
     the valid candidate range — callers must perform that check.
 
-    The regex is byte-identical to the decision parser in
-    ``Game24Task.vote_outputs_unwrap`` so telemetry never reports parse
-    success where the decision parser does not, and vice versa.
+    Delegates to :func:`federated_mcts.core.observation.parse_vote_choice`,
+    the same parser ``Game24Task.vote_outputs_unwrap`` uses, so telemetry
+    never reports parse success where the decision parser does not, and
+    vice versa.
     """
-    match = _VOTE_PARSE_PATTERN.search(raw)
-    if not match:
-        return (None, False, "no_match")
-    return (int(match.group(1)), True, None)
+    choice = parse_vote_choice(raw)
+    return (choice.vote_index, choice.matched, choice.failure_reason)

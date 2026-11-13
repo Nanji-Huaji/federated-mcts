@@ -60,13 +60,13 @@ def _build_target_manifest(*, task_ids=None, **overrides) -> Game24Manifest:
             max_cost_usd=None,
             max_raw_unit_limit=19.99,
             split_file_path=split_file.name,
-            model_config_raw=[{"model": "deepseek-v4-flash"}],
+            model_config_raw=[{"model": "qwen3.7-plus"}],
         )
     finally:
         os.unlink(split_file.name)
     # Override computed fields to match B0 source fixture
     object.__setattr__(m, "model_config_sha256", "c" * 64)
-    object.__setattr__(m, "model_names", ["deepseek-v4-flash"])
+    object.__setattr__(m, "model_names", ["qwen3.7-plus"])
     # Allow caller overrides
     for k, v in overrides.items():
         object.__setattr__(m, k, v)
@@ -163,7 +163,7 @@ class TestTargetIdentityGate(unittest.TestCase):
         ps = self._b0_fixture_paths()
         target = _build_target_manifest(
             task_ids=_val_200_ids(),
-            model_names=["Qwen/Qwen2.5-7B-Instruct", "deepseek-v4-flash"],
+            model_names=["Qwen/Qwen2.5-7B-Instruct", "qwen3.7-plus"],
         )
         with self.assertRaises(SystemExit):
             enforce_b0_gate(_args(

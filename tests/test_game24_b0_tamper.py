@@ -56,7 +56,7 @@ def _mf(**kw) -> dict:
         "split_file_sha256": "a" * 64,
         "ordered_task_ids_sha256": "b" * 64,
         "model_config_sha256": "c" * 64,
-        "model_names": ["deepseek-v4-flash"],
+        "model_names": ["qwen3.7-plus"],
         # ── Git metadata ──────────────────────────────────
         "git_commit": "0000000",
         "worktree_dirty": False,
@@ -72,15 +72,15 @@ def _derive_fps(mf_dict: dict) -> tuple[str, str]:
 def _pf(run_fp: str, dp_fp: str, **kw) -> dict:
     d: dict = {
         "acc": 0.0, "avg_sum": 0.0,
-        "llm": "deepseek-v4-flash",
-        "deepseek-v4-flash": {
-            "total_calls": 160, "prompt_tokens": 64960,
-            "completion_tokens": 81919, "total_tokens": 146879,
-            "cost": 0.03203172,
+        "llm": "qwen3.7-plus",
+        "qwen3.7-plus": {
+            "total_calls": 165, "prompt_tokens": 85992,
+            "completion_tokens": 84054, "total_tokens": 170046,
+            "cost": 0.1688832,
         },
-        "estimated_cost_usd": 0.03203172,
-        "budget_spent": 0.03203172,
-        "budget_remaining": 19.95796828,
+        "estimated_cost_usd": 0.1688832,
+        "budget_spent": 0.1688832,
+        "budget_remaining": 19.8235328,
         "complete": True, "run_fingerprint": run_fp,
         "decision_policy_fingerprint": dp_fp,
     }
@@ -96,7 +96,7 @@ def _jf(run_fp: str, task_ids=None) -> dict:
     return j
 
 
-def _bf(spent=0.03203172, limit=19.99) -> list[dict]:
+def _bf(spent=0.1688832, limit=19.99) -> list[dict]:
     import hashlib
 
     def sh(obj):

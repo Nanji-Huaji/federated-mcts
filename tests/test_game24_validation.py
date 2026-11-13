@@ -214,5 +214,80 @@ class TestNegativeResultHandling(unittest.TestCase):
         self.assertTrue(correct, "DEFECT: 5-5=0 is exact, must be valid")
 
 
+class TestLeftMultisetOrderIndependence(unittest.TestCase):
+    """The `left:` remain-set is a multiset; its printed order must not matter.
+
+    Regression: `check_final_result` compared the model's printed `left:` list
+    against an internally sorted one with `!=`, so an arithmetically correct step
+    was rejected whenever the model printed the remain-set out of ascending order.
+    That silently scored correct Game24 solutions as failures.
+    """
+
+    def test_unsorted_left_rejected_before_fix(self):
+        """1+2=3 with remain-set {3,3,4} printed as '4 3 3' is still valid."""
+        from federated_mcts.utils.format_check import check_final_result
+        correct, _ = check_final_result(
+            "1 + 2 = 3 (left: 4 3 3)", x="1 2 3 4",
+        )
+        self.assertTrue(
+            correct,
+            "DEFECT: '1 + 2 = 3' is arithmetically correct; the remaining "
+            "multiset {3,3,4} must be accepted in any printed order",
+        )
+
+    def test_unsorted_left_two_element_remainder(self):
+        """3+3=6 from {3,3,4,8} leaves {4,6,8}; '8 4 6' order must be accepted."""
+        from federated_mcts.utils.format_check import check_final_result
+        correct, _ = check_final_result(
+            "3 + 3 = 6 (left: 8 4 6)", x="3 3 4 8",
+        )
+        self.assertTrue(
+            correct,
+            "DEFECT: remain-set {4,6,8} printed as '8 4 6' must be accepted",
+        )
+
+    def test_pilot_task_3_correct_solution_accepted(self):
+        """The textbook solution to '1 1 1 8' must be scored successful.
+
+        Captured from the B0 pilot: the model produced this exact trajectory and
+        the grader returned False purely because each `left:` was unsorted.
+        """
+        from federated_mcts.tasks.game24 import Game24Task
+        task = Game24Task()
+        trajectory = (
+            "1 + 1 = 2 (left: 1 8 2)\n"
+            "1 + 2 = 3 (left: 8 3)\n"
+            "8 * 3 = 24 (left: 24)\n"
+        )
+        self.assertTrue(
+            task.is_success_state("1 1 1 8", trajectory),
+            "DEFECT: 8*(1+1+1)=24 is the canonical solution to '1 1 1 8' and "
+            "must be scored successful regardless of `left:` print order",
+        )
+
+    def test_wrong_multiset_still_rejected(self):
+        """Order-independence must NOT accept a genuinely wrong remain-set."""
+        from federated_mcts.utils.format_check import check_final_result
+        correct, _ = check_final_result(
+            "1 + 2 = 3 (left: 4 5 5)", x="1 2 3 4",
+        )
+        self.assertFalse(
+            correct,
+            "DEFECT: remain-set {4,5,5} does not match {3,3,4} and must be rejected",
+        )
+
+    def test_sorted_and_unsorted_agree(self):
+        """Permuting only the print order must not change the verdict."""
+        from federated_mcts.utils.format_check import check_final_result
+        verdicts = [
+            check_final_result(f"1 + 2 = 3 (left: {order})", x="1 2 3 4")[0]
+            for order in ("3 3 4", "4 3 3", "3 4 3")
+        ]
+        self.assertEqual(
+            verdicts, [True, True, True],
+            "DEFECT: `left:` print order must not affect the verdict",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

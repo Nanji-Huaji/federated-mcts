@@ -1,30 +1,22 @@
-"""Helpers for persisting passive Game24 vote telemetry."""
+"""Compatibility shim for Game24 vote telemetry.
+
+The record construction now lives in :mod:`federated_mcts.core.observation`
+(the core search primitives must not depend on evaluation code).  This module
+keeps its historical import path and function signature for existing callers.
+"""
 
 from __future__ import annotations
 
-from federated_mcts.evaluation.game24_instrumentation import (
+from federated_mcts.core.observation import (
     VoteAggregateRecord,
     VoteCallRecord,
-    VoteRecorder,
+    VoteObservationSink,
+    record_vote_step,
 )
 
-
-def record_vote_step(
-    recorder: VoteRecorder,
-    depth: int,
-    evaluator_mode: str,
-    evaluator_identity: str,
-    n_candidates: int,
-    vote_totals: list[int],
-    calls: list[VoteCallRecord],
-) -> None:
-    """Append one evaluator call aggregate without altering vote totals."""
-    recorder.record_step(VoteAggregateRecord(
-        depth=depth,
-        n_candidates=n_candidates,
-        evaluator_mode=evaluator_mode,
-        evaluator_identity=evaluator_identity,
-        call_count=len(calls),
-        vote_totals=vote_totals,
-        calls=calls,
-    ))
+__all__ = [
+    "VoteAggregateRecord",
+    "VoteCallRecord",
+    "VoteObservationSink",
+    "record_vote_step",
+]

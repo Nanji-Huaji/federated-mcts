@@ -1,10 +1,15 @@
 import json
-import subprocess
 import os
+import subprocess
+import sys
 import time
 import warnings
-from typing import List, Dict, Any
 from datetime import datetime
+from types import SimpleNamespace
+from typing import Any, Dict, List
+
+from federated_mcts.evaluation.game24_manifest import resolve_task_ids
+from federated_mcts.evaluation.game24_runner_persistence import compute_file_prefix
 
 """
 探究实验脚本：
@@ -18,9 +23,11 @@ from datetime import datetime
 
 def run_experiment(config: Dict[str, Any]) -> bool:
     """运行单个实验"""
+    # Canonical entry point: the same module the installed ``fmcts-run`` uses.
     command = [
-        "python",
-        "merged_run.py",
+        sys.executable,
+        "-m",
+        "federated_mcts",
         "--task",
         config["task"],
         "--task_start_index",
@@ -57,28 +64,58 @@ def run_experiment(config: Dict[str, Any]) -> bool:
     return True
 
 
-def get_file_path(config: Dict[str, Any]) -> str:
-    """生成结果文件路径"""
+def get_file_path(config: Dict[str, Any]) -> str | None:
+    """生成结果文件路径（必须与 runner 的命名完全一致）。"""
     try:
         with open(config["model_config"], "r") as f:
             model_config_data = json.load(f)
 
-        remotebackend = next(
-            (model["model"] for model in model_config_data if model["client_name"] == "remote_client"), "unknown_remote"
+        remote_model = next(
+            (model["model"] for model in model_config_data if model["client_name"] == "remote_client"),
+            "unknown_remote",
+        )
+        local_model = next(
+            (model["model"] for model in model_config_data if model["client_name"] == "local_client"),
+            "unknown_local",
+        )
+        task_count = len(
+            resolve_task_ids(
+                task=config["task"],
+                split_file_path="",
+                task_split=None,
+                task_start_index=config["task_start_index"],
+                task_end_index=config["task_end_index"],
+            )
         )
 
-        # 构建文件路径
-        file_path = (
-            f"./logs/{config['task']}/{config['solve_method']}/{remotebackend}/"
-            f"{config['temperature']}_{config['method_generate']}_n_generate_sample_"
-            f"{config['n_select_sample']}_{config['method_evaluate']}_n_evaluate_sample_"
-            f"{config['n_evaluate_sample']}_method_select_{config['method_select']}_"
-            f"n_select_sample_{config['n_select_sample']}_start{config['task_start_index']}_"
-            f"end{config['task_end_index']}_smg_False_sme_False_check_{config.get('check_format', False)}_"
-            f"rule_False_warm_False_last_False_idx_0"
+        # The runner resolves the same fields before naming; mirror that input
+        # rather than re-implementing the filename grammar here.
+        naming = SimpleNamespace(
+            naive_run=False,
+            task=config["task"],
+            solve_method=config["solve_method"],
+            localbackend=local_model,
+            remotebackend=remote_model,
+            temperature=config["temperature"],
+            method_generate=config["method_generate"],
+            n_generate_sample=1,
+            method_evaluate=config["method_evaluate"],
+            n_evaluate_sample=config["n_evaluate_sample"],
+            method_select=config["method_select"],
+            n_select_sample=config["n_select_sample"],
+            search_policy="baseline",
+            task_start_index=config["task_start_index"],
+            task_end_index=config["task_end_index"],
+            slm_generate=False,
+            slm_eval=False,
+            check_format=bool(config.get("check_format", False)),
+            eval_rule=False,
+            warm_start=False,
+            last_lm=False,
+            inference_idx=0,
+            game24_exact_prune=False,
         )
-
-        return file_path
+        return compute_file_prefix(naming, task_count=task_count)
     except Exception as e:
         print(f"Error generating file path: {e}")
         return None
@@ -199,6 +236,10 @@ def run_full_evaluation(top_configs: List[Dict[str, Any]]) -> List[Dict[str, Any
 
     full_configs = []
 
+    # NOTE: the current Game24 safety gate rejects non-``tot`` experiments over
+    # more than 20 tasks.  Historical top-config scale-ups here will therefore
+    # fail loudly (run_experiment returns False) rather than silently switching
+    # algorithm; redesign the sweep before relying on this phase.
     # 1. 扩展top配置到完整任务范围
     for config in top_configs:
         full_config = config.copy()

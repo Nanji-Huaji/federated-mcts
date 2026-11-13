@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "federated-mcts"
-version = "0.1.0"
+version = "0.2.0"
 description = "Federated Monte Carlo Tree Search for Large Language Model Inference"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,6 +27,12 @@ dependencies = [
     "sympy>=1.12",
     "tqdm>=4.65.0",
     "pandas>=2.0.3",
+]
+
+[project.optional-dependencies]
+# Heavy ML backends are only needed for local vLLM inference and DQN search.
+# The HTTP/API and Game24 paths must stay importable without either.
+local = [
     "torch>=2.0.0",
     "transformers>=4.30.0",
 ]
@@ -37,6 +43,21 @@ Homepage = "https://github.com/princeton-nlp/tree-of-thought-llm"
 [project.scripts]
 fmcts-run = "federated_mcts.cli:run_main"
 fmcts-exp = "federated_mcts.cli:exp_main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["federated_mcts*"]
+
+[tool.setuptools.package-data]
+federated_mcts = [
+    "data/24/*.csv",
+    "data/crosswords/*.json",
+    "data/gsm8k/*.jsonl",
+    "data/text/*.txt",
+]
 
 [tool.mypy]
 check_untyped_defs = true
