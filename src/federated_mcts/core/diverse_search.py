@@ -19,9 +19,10 @@ class SearchDecision:
 
 
 class DiverseSearch:
-    def __init__(self, args):
+    def __init__(self, args, *, evaluator_cache_for=None):
         self.config = DiverseSearchConfig.from_args(args)
         self.cache: dict[CacheKey, float] = {}
+        self._evaluator_cache_for = evaluator_cache_for
 
     def decide(self, args, task, x: str, candidates: list[str], client, evaluator_id: str) -> SearchDecision:
         unique, states = deduplicate_candidates(task, x, candidates)
@@ -38,6 +39,8 @@ class DiverseSearch:
             evaluator_id,
             self.cache,
             self.config.joint_rank,
+            value_cache=(self._evaluator_cache_for(task, evaluator_id, client, x)
+                         if self._evaluator_cache_for is not None else None),
         )
         width = adaptive_beam_width(
             values,

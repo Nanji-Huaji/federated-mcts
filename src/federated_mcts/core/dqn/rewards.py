@@ -13,7 +13,7 @@ def correctness_reward(is_success: bool) -> float:
     return 1.0 if is_success else 0.0
 
 
-def token_penalty(tokens: int, max_tokens: int = 1000) -> float:
+def token_penalty(tokens: float, max_tokens: int = 1000) -> float:
     if max_tokens <= 0:
         return 0.0
     return min(1.0, max(0.0, tokens / max_tokens))
@@ -23,6 +23,15 @@ def latency_penalty(seconds: float, budget_seconds: float = 10.0) -> float:
     if budget_seconds <= 0:
         return 0.0
     return min(1.0, max(0.0, seconds / budget_seconds))
+
+
+def oracle_distance_reward(
+    before: int | None, after: int | None, scale: float = 0.25
+) -> float:
+    """Bounded dense reward for an exact remaining-distance improvement."""
+    if before is None or after is None:
+        return 0.0
+    return min(1.0, max(-1.0, (before - after) * scale))
 
 
 def rewards_for_episode(

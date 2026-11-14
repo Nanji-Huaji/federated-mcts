@@ -1,37 +1,103 @@
 import itertools
 import time
+from typing import Literal, Protocol
 from federated_mcts.utils.exhaustive import assert_never
 
 import numpy as np
 
 from federated_mcts.core.diverse_search import DiverseSearch
-from federated_mcts.core.dqn.factory import build_dqn_session
 from federated_mcts.core.evaluation import get_values, get_votes
 from federated_mcts.core.generation import get_proposals, get_samples
+from federated_mcts.federation._dqn_finish import build_dqn_session, finish_dqn_session
+from federated_mcts.federation._failed_step import record_failed_step_if_empty
+from federated_mcts.federation._record_decision import record_baseline_decision
+from federated_mcts.federation.evaluator_cache import TaskEvaluatorCaches
+from federated_mcts.federation.time_tracker import TimeTracker
+from federated_mcts.models.usage import get_usage_tracker
+
+
+class StandardSolverArgs(Protocol):
+    """CLI options consumed by the standard solver methods."""
+
+    n_generate_sample: int
+    prompt_sample: Literal["standard", "cot"] | None
+    search_policy: Literal["baseline", "diverse", "dqn"]
+    method_generate: Literal["sample", "propose"]
+    game24_exact_prune: bool
+    method_evaluate: Literal["vote", "value"]
+    n_evaluate_sample: int
+    method_select: Literal["sample", "greedy"]
+    n_select_sample: int
+    warm_start: bool
+    last_lm: bool
+    slm_eval: bool
+
+
+class GenerationClient(Protocol):
+    """Callable interface shared by remote and local generation clients."""
+
+    def __call__(
+        self,
+        args: StandardSolverArgs,
+        prompt: str,
+        n: int = 1,
+        stop: str | list[str] | None = None,
+        get_logprobs: bool = False,
+    ) -> list[str]: ...
 
 
 class StandardSolversMixin:
+    args: StandardSolverArgs
+    gpts: dict[str, GenerationClient]
+    time_tracker: TimeTracker
+
+    def _ensure_evaluator_caches(self) -> TaskEvaluatorCaches:
+        caches = getattr(self, "_evaluator_caches", None)
+        if caches is None:
+            caches = TaskEvaluatorCaches()
+            self._evaluator_caches = caches
+        return caches
+
+    def evaluator_cache(self, task, evaluator_id: str, client, input_text: str | None = None):
+        """Return this solver's value cache for ``(task, input, client, identity)``."""
+        return self._ensure_evaluator_caches().for_evaluator(
+            task, evaluator_id, client, input_text)
+
     def naive_solve(self, task, idx, to_print=True, solve_client="remote_client", **kwargs):
         x = task.get_input(idx)
         ys = get_samples(
             self.args, task, x, "", self.args.n_generate_sample,
-            self.args.prompt_sample, stop=None,
+            self.args.prompt_sample, stop=None, client=self.gpts[solve_client],
         )
         return ys, {}
 
     def solve(self, task, idx, to_print=True, solve_client="remote_client", **kwargs):
         gpt_fn = self.gpts[solve_client]
+        task_recorder = kwargs.get("task_recorder")
+        self._ensure_evaluator_caches()
         x = task.get_input(idx)
         ys = [""]
         infos = []
         search_policy = getattr(self.args, "search_policy", "baseline")
-        diverse_search = DiverseSearch(self.args) if search_policy == "diverse" else None
-        dqn_session = build_dqn_session(self.args) if search_policy == "dqn" else None
+        diverse_search = DiverseSearch(
+            self.args, evaluator_cache_for=self.evaluator_cache,
+        ) if search_policy == "diverse" else None
+        dqn_session = build_dqn_session(
+            self.args, evaluator_cache_for=self.evaluator_cache,
+        ) if search_policy == "dqn" else None
         self.dqn_session = dqn_session
         for step in range(task.steps):
-            match self.args.method_generate:
+            step_started_at = time.time()
+            generation_recorder = (
+                task_recorder.new_generation_recorder()
+                if task_recorder is not None else None)
+            generation_started = time.perf_counter()
+            generation_tokens_before = get_usage_tracker().get_total_tokens()
+            candidate_batches: list[list[str]]
+            solve_method_generate: Literal["sample", "propose"] = self.args.method_generate
+            match solve_method_generate:
                 case "sample":
-                    new_ys = [
+                    candidate_batches = [
                         get_samples(
                             self.args, task, x, y, self.args.n_generate_sample,
                             prompt_sample=self.args.prompt_sample, stop=task.stops[step],
@@ -40,10 +106,33 @@ class StandardSolversMixin:
                         for y in ys
                     ]
                 case "propose":
-                    new_ys = [get_proposals(self.args, step, task, x, y, client=gpt_fn) for y in ys]
-                case unreachable:
-                    assert_never(unreachable)
-            new_ys = list(itertools.chain(*new_ys))
+                    candidate_batches = [get_proposals(
+                        self.args, step, task, x, y, client=gpt_fn,
+                        recorder=generation_recorder, parent_index=parent_index)
+                        for parent_index, y in enumerate(ys)]
+                case unreachable_generate:
+                    assert_never(unreachable_generate)
+            new_ys = list(itertools.chain.from_iterable(candidate_batches))
+            generation_latency = time.perf_counter() - generation_started
+            step_tokens = max(
+                0, get_usage_tracker().get_total_tokens() - generation_tokens_before)
+            # ---- Game24 exact dead-end pruning (non-DQN only) ----
+            prune_metrics: dict[str, int] = {}
+            if getattr(self.args, "game24_exact_prune", False) and dqn_session is None:
+                from federated_mcts.tasks.game24 import Game24Task
+                if isinstance(task, Game24Task):
+                    from federated_mcts.tasks.game24_exact_prune import prune_unreachable
+                    prune_proposed = len(new_ys)
+                    new_ys, _, prune_pruned = prune_unreachable(new_ys, task, x)
+                    prune_metrics = {
+                        "exact_prune_proposed": prune_proposed,
+                        "exact_prune_pruned": prune_pruned,
+                        "exact_prune_retained": len(new_ys),
+                    }
+            if record_failed_step_if_empty(
+                    new_ys, task_recorder, step, ys, generation_recorder,
+                    step_started_at, task, x):
+                break
             ids = list(range(len(new_ys)))
 
             if diverse_search is not None:
@@ -58,6 +147,7 @@ class StandardSolversMixin:
                         "raw_candidates": raw_candidate_count,
                         "unique_states": len(decision.candidates),
                         "beam_width": len(decision.selected),
+                        **prune_metrics,
                     },
                 })
                 ys = decision.selected
@@ -75,6 +165,8 @@ class StandardSolversMixin:
                     evaluator_id=solve_client,
                     step=step,
                     total_steps=task.steps,
+                    step_tokens=float(step_tokens),
+                    step_latency=generation_latency,
                 )
                 step_info = {
                     "step": step, "x": x, "ys": ys, "new_ys": outcome.candidates,
@@ -84,27 +176,47 @@ class StandardSolversMixin:
                 step_info["dqn_transitions"] = outcome.transitions
                 infos.append(step_info)
                 ys = outcome.selected
-                if outcome.stopped:
+                if outcome.stopped or not ys:
                     break
                 continue
 
-            match self.args.method_evaluate:
+            solve_method_evaluate: Literal["vote", "value"] = self.args.method_evaluate
+            vote_recorder = (
+                task_recorder.new_vote_recorder()
+                if task_recorder is not None else None)
+            match solve_method_evaluate:
                 case "vote":
-                    values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=gpt_fn)
+                    values = get_votes(
+                        self.args, task, x, new_ys,
+                        self.args.n_evaluate_sample, client=gpt_fn,
+                        recorder=vote_recorder, evaluator_mode="vote",
+                        evaluator_identity=solve_client, depth=step)
                 case "value":
-                    values = get_values(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=gpt_fn)
-                case unreachable:
-                    assert_never(unreachable)
+                    values = get_values(
+                        self.args, task, x, new_ys, self.args.n_evaluate_sample,
+                        client=gpt_fn,
+                        cache=self.evaluator_cache(task, solve_client, gpt_fn, x),
+                        evaluator_identity=solve_client,
+                    )
+                case unreachable_evaluate:
+                    assert_never(unreachable_evaluate)
 
-            match self.args.method_select:
+            solve_method_select: Literal["sample", "greedy"] = self.args.method_select
+            match solve_method_select:
                 case "sample" if sum(values) > 0:
                     probabilities = np.array(values) / sum(values)
                     select_ids = np.random.choice(ids, size=self.args.n_select_sample, p=probabilities).tolist()
                 case "sample" | "greedy":
                     select_ids = sorted(ids, key=lambda index: values[index], reverse=True)[:self.args.n_select_sample]
-                case unreachable:
-                    assert_never(unreachable)
+                case unreachable_select:
+                    assert_never(unreachable_select)
             select_new_ys = [new_ys[select_id] for select_id in select_ids]
+
+            if task_recorder is not None:
+                record_baseline_decision(
+                    task_recorder, step, ys, candidate_batches, new_ys, values,
+                    select_ids, select_new_ys, step_started_at, task, x,
+                    generation_recorder, vote_recorder)
 
             if to_print:
                 sorted_new_ys, sorted_values = zip(*sorted(zip(new_ys, values), key=lambda item: item[1], reverse=True))
@@ -113,22 +225,25 @@ class StandardSolversMixin:
             infos.append({
                 "step": step, "x": x, "ys": ys, "new_ys": new_ys,
                 "values": values, "select_new_ys": select_new_ys,
+                "search_metrics": prune_metrics,
             })
             ys = select_new_ys
 
-        if dqn_session is not None:
-            dqn_session.finish_episode()
-            remaining = dqn_session.drain_transitions()
-            if remaining and infos:
-                infos[-1].setdefault("dqn_transitions", []).extend(remaining)
+        finish_dqn_session(
+            dqn_session, infos,
+            flush_terminal=not getattr(self, "_defer_dqn_terminal", False),
+        )
 
         if to_print:
             print(ys)
         return ys, {"steps": infos}
 
     def speculative_solve(self, task, idx, to_print=True, solve_client=None, eval_client=None, **kwargs):
-        local_client = self.gpts["local_client"] if solve_client is None else self.gpts[solve_client]
-        remote_client = self.gpts["remote_client"] if eval_client is None else self.gpts[eval_client]
+        self._ensure_evaluator_caches()
+        solve_name = "local_client" if solve_client is None else solve_client
+        eval_name = "remote_client" if eval_client is None else eval_client
+        local_client = self.gpts[solve_name]
+        remote_client = self.gpts[eval_name]
         print(f"local_client: {local_client}, remote_client: {remote_client}")
 
         x = task.get_input(idx)
@@ -138,22 +253,28 @@ class StandardSolversMixin:
         for step in range(task.steps):
             solve_gpt = local_client
             eval_gpt = remote_client
+            current_eval_name = eval_name
 
             if self.args.warm_start and step == 0:
                 solve_gpt = remote_client
                 eval_gpt = remote_client
+                current_eval_name = eval_name
             elif step + 1 == task.steps and self.args.last_lm:
                 solve_gpt = remote_client
                 eval_gpt = remote_client
+                current_eval_name = eval_name
 
             if self.args.slm_eval:
                 eval_gpt = local_client
+                current_eval_name = solve_name
             print(f"Step {step} of {task.steps} in Task {idx}, solve_client: {solve_gpt}, eval_client: {eval_gpt}")
 
             start_time = time.time()
-            match self.args.method_generate:
+            candidate_batches: list[list[str]]
+            speculative_method_generate: Literal["sample", "propose"] = self.args.method_generate
+            match speculative_method_generate:
                 case "sample":
-                    new_ys = [
+                    candidate_batches = [
                         get_samples(
                             self.args, task, x, y, self.args.n_generate_sample,
                             prompt_sample=self.args.prompt_sample, stop=task.stops[step],
@@ -162,31 +283,38 @@ class StandardSolversMixin:
                         for y in ys
                     ]
                 case "propose":
-                    new_ys = [get_proposals(self.args, step, task, x, y, client=solve_gpt) for y in ys]
-                case unreachable:
-                    assert_never(unreachable)
-            new_ys = list(itertools.chain(*new_ys))
+                    candidate_batches = [get_proposals(self.args, step, task, x, y, client=solve_gpt) for y in ys]
+                case unreachable_generate_speculative:
+                    assert_never(unreachable_generate_speculative)
+            new_ys = list(itertools.chain.from_iterable(candidate_batches))
             ids = list(range(len(new_ys)))
             self.time_tracker.record_generation("speculative", time.time() - start_time)
 
             start_time = time.time()
-            match self.args.method_evaluate:
+            speculative_method_evaluate: Literal["vote", "value"] = self.args.method_evaluate
+            match speculative_method_evaluate:
                 case "vote":
                     values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
                 case "value":
-                    values = get_values(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
-                case unreachable:
-                    assert_never(unreachable)
+                    values = get_values(
+                        self.args, task, x, new_ys, self.args.n_evaluate_sample,
+                        client=eval_gpt,
+                        cache=self.evaluator_cache(task, current_eval_name, eval_gpt, x),
+                        evaluator_identity=current_eval_name,
+                    )
+                case unreachable_evaluate_speculative:
+                    assert_never(unreachable_evaluate_speculative)
             self.time_tracker.record_evaluation("speculative", time.time() - start_time)
 
-            match self.args.method_select:
+            speculative_method_select: Literal["sample", "greedy"] = self.args.method_select
+            match speculative_method_select:
                 case "sample" if sum(values) > 0:
                     probabilities = np.array(values) / sum(values)
                     select_ids = np.random.choice(ids, size=self.args.n_select_sample, p=probabilities).tolist()
                 case "sample" | "greedy":
                     select_ids = sorted(ids, key=lambda index: values[index], reverse=True)[:self.args.n_select_sample]
-                case unreachable:
-                    assert_never(unreachable)
+                case unreachable_select_speculative:
+                    assert_never(unreachable_select_speculative)
             select_new_ys = [new_ys[select_id] for select_id in select_ids]
 
             if to_print:

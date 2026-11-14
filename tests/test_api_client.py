@@ -13,10 +13,11 @@ Expected contract:
 
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0, "src")
 
-from federated_mcts.models.api_client import _create_client, _create_completion
+from federated_mcts.models.api_client import _create_client, _create_completion, chatgpt
 
 
 class TestApiClientCache(unittest.TestCase):
@@ -52,6 +53,35 @@ class TestSingleRetryLayer(unittest.TestCase):
             "layer on top of OpenAI(max_retries=5).  "
             "Expected: undecorated; only the OpenAI client retries.",
         )
+
+
+class TestDeepSeekV4ChoiceLimit(unittest.TestCase):
+    def test_v4_splits_multiple_choices_into_single_choice_requests(self):
+        calls = []
+
+        class _Usage:
+            completion_tokens = 1
+            prompt_tokens = 1
+
+        class _Choice:
+            def __init__(self, content):
+                self.message = type("Message", (), {"content": content})()
+
+        class _Response:
+            usage = _Usage()
+            choices = [_Choice("response")]
+
+        def completion(**kwargs):
+            calls.append(kwargs["n"])
+            return _Response()
+
+        with patch("federated_mcts.models.api_client._create_client"), patch(
+            "federated_mcts.models.api_client._create_completion", side_effect=completion
+        ):
+            outputs = chatgpt(None, [], model="deepseek-v4-pro", n=3)
+
+        self.assertEqual(calls, [1, 1, 1])
+        self.assertEqual(outputs, ["response", "response", "response"])
 
 
 if __name__ == "__main__":

@@ -118,8 +118,129 @@ $$
 
 ## Results
 
+## Installation
+
+The runnable package is `federated_mcts` (version `0.2.0`), built from the
+`src/` layout. Python 3.10 or newer is required.
+
+```bash
+# HTTP/API runs: no torch or transformers are installed or imported.
+pip install -e .
+
+# Local vLLM inference and DQN search need the optional ML backends.
+pip install -e ".[local]"
+```
+
+`src/tot/` is kept in the checkout as legacy reference material. It is **not**
+part of the distribution; setuptools is configured to package only
+`federated_mcts`, and `MANIFEST.in` carries only `src/federated_mcts/data`.
+The HTTP model clients, Game24 runner, and experiment runner must remain
+importable without `torch` or `transformers`.
+
+For a source checkout without installation, put `src` on `PYTHONPATH`:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m federated_mcts --help
+```
+
 ## Usage
 
-This part will comming soon.
+The canonical entry points are:
+
+| Entry point | Equivalent | Purpose |
+| --- | --- | --- |
+| `python -m federated_mcts` | `fmcts-run` | Run one search experiment. |
+| `fmcts-exp` | `python -m federated_mcts.experiments.sweep` | Historical Game24 sampling sweep. |
+
+Run one experiment from a source checkout:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m federated_mcts \
+  --task game24 \
+  --task_start_index 0 --task_end_index 3 \
+  --model_config configs/model_config_vllm.json \
+  --solve_method tot \
+  --method_generate propose \
+  --method_evaluate vote \
+  --method_select greedy \
+  --n_generate_sample 2 \
+  --n_evaluate_sample 3 \
+  --n_select_sample 2 \
+  --temperature 0.9 \
+  --check_format
+```
+
+Useful safety/output options:
+
+- `--dry_run` resolves flags, task IDs, the model config, the manifest, and the
+  projection without creating output files, clients, or making API calls.
+- `--mock_client` uses the deterministic offline Game24 client; it still goes
+  through the normal solver constructor and search path.
+- `--resume` continues a run only when the journal's `run_fingerprint` matches;
+  without it, an existing output prefix is rejected, never overwritten.
+- Outputs are written under `logs/<task>/<solve_method>/<remote_model>/` as
+  `<prefix>_manifest.json`, `<prefix>.json`, `<prefix>_performance.json`,
+  `<prefix>_journal.json`, and `<prefix>_budget.jsonl`. The prefix ends in
+  `_ntasks{N}`. Equal-size task sets can share a prefix; use a different
+  `--inference_idx` for a different run rather than overwriting earlier evidence.
+
+New runs use schema-v2 manifests, including all resolved decision options and
+an explicit mock/real distinction. Historical v1 evidence remains readable and
+verifiable, but cannot authorize a v2 validation run: generate a new v2 pilot.
+Game24 audited/full validation currently requires baseline `tot` telemetry.
+DQN checkpoint identity follows file contents, not the filename. Execution rejects
+changes since preparation, and the loader verifies the exact bytes it deserializes.
+
+### Internal boundaries
+
+- [DecisionSpec](<src/federated_mcts/config.py>) is the immutable source for search
+  options and decision identity; model configuration is resolved once per run.
+- [Experiment runner](<src/federated_mcts/experiments/runner.py>) separates read-only
+  `prepare()` from `execute()`, which owns authorization, clients, usage and commits.
+- [FederatedSolver](<src/federated_mcts/federation/orchestrator.py>) accepts injected
+  clients. [finish_task](<src/federated_mcts/federation/outcome.py>) verifies the
+  outcome before publishing the DQN terminal transition.
+- [Observation protocols](<src/federated_mcts/core/observation.py>) keep search
+  primitives independent of concrete Game24 telemetry recorders. Evaluation caches
+  are isolated by task/input, client instance and evaluator identity.
+- [Usage scopes](<src/federated_mcts/models/usage.py>) isolate concurrent runs;
+  [RateCard](<src/federated_mcts/models/rates.py>) supplies shared Decimal pricing.
+- [TaskCommitter](<src/federated_mcts/evaluation/game24_persistence.py>) orders
+  durable outcome → keyed charge → settled outcome. Evidence verification uses a
+  separate read-only ledger parser, never a writable ledger constructor.
+
+Recovery settles a durable task outcome and its exact Decimal charge at most
+once. An interrupted API call with no metered outcome is deliberately **not**
+automatically replayed: its usage is unknown and needs manual reconciliation.
+Run artifacts have a single-writer contract. Call/token caps are checked at task
+boundaries, not inside a model request. Selected-test authorization stays
+one-shot; `--resume` does not reauthorize a consumed selected-test attempt.
+
+`fmcts-exp` preserves the historical sampling sweep. Its phase-2 non-`tot`
+Game24 configs over more than 20 tasks are rejected by the current runner
+safety gate; update the experiment design before reusing that phase.
+
+The pre-refactor layout is gone. In particular:
+
+| Removed | Replacement |
+| --- | --- |
+| root `run.py`, root `merged_run.py`, root `exp.py` | `python -m federated_mcts` / `fmcts-run` (search) and `fmcts-exp` (sweep). |
+| `scripts/run.py`, `scripts/merged_run.py`, `scripts/exp.py` | The same canonical module entry points; the run lifecycle lives in `federated_mcts.experiments.runner`, and sweep lives in `federated_mcts.experiments.sweep`. |
+| `scripts/game24/*.sh`, `scripts/text/*.sh`, `scripts/crosswords/*.sh`, `scripts/gsm8k/*.sh` recipes tied to the deleted scripts | The two recipes that remain were converted to `python -m federated_mcts`; incompatible ones were deleted with reasons in [`scripts/README.md`](scripts/README.md). |
+
+The runner keeps the same experimental parameters and environment handling as
+the retired scripts: model configuration, credentials, task range/split, solver
+knobs, and output location are still explicit inputs, and no recipe silently
+substitutes a model or algorithm.
+
+## Testing
+
+```bash
+PYTHONPATH=src RUN_LIVE_DEEPSEEK_DIAGNOSTIC=0 \
+  .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+```
+
+Tests are offline by default. The live DeepSeek diagnostic is opt-in through
+`RUN_LIVE_DEEPSEEK_DIAGNOSTIC=1` and is never required by the suite.
 
 ## Small Talk

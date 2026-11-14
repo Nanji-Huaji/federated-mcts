@@ -32,6 +32,8 @@ class DoubleDQNTrainer:
         self.optimizer = torch.optim.Adam(q_network.parameters(), lr=learning_rate)
 
     def train_step(self) -> float:
+        if self.replay_buffer is None:
+            raise RuntimeError("replay buffer is required for training")
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(self.batch_size)
         current = self.q_network(states).gather(1, actions.unsqueeze(1)).squeeze(1)
         with torch.no_grad():

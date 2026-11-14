@@ -4,6 +4,7 @@ from fractions import Fraction
 import sympy
 import pandas as pd
 from federated_mcts.tasks.base import Task, DATA_PATH
+from federated_mcts.core.observation import parse_vote_choice
 
 from federated_mcts.prompts.game24 import *  # type: ignore
 
@@ -39,6 +40,8 @@ class Game24Task(Task):
         super().__init__()
         path = os.path.join(DATA_PATH, "24", file)
         self.data = list(pd.read_csv(path)["Puzzles"])
+        # Legacy attribute kept for compatibility; core.evaluation no longer
+        # reads or writes it (prompt-only keys leaked scores across evaluators).
         self.value_cache = {}
         self.steps = 3
         self.stops = ["\n"] * 4
@@ -137,6 +140,23 @@ class Game24Task(Task):
         return value
 
     @staticmethod
+    def vote_prompt_wrap(x: str, ys: list) -> str:
+        from federated_mcts.prompts.game24 import vote_prompt
+        cs = chr(10).join(f"Choice {i}:\n{y}" for i, y in enumerate(ys))
+        return vote_prompt.format(x=x, cs=cs)
+
+    @staticmethod
+    def vote_outputs_unwrap(vote_outputs: list, n_candidates: int) -> list:
+        vote_results = [0] * n_candidates
+        for vote_output in vote_outputs:
+            choice = parse_vote_choice(vote_output)
+            if choice.matched and choice.vote_index is not None:
+                if 0 <= choice.vote_index < n_candidates:
+                    vote_results[choice.vote_index] += 1
+            else:
+                print(f"vote no match: {[vote_output]}")
+        return vote_results
+    @staticmethod
     def canonical_state_key(x: str, y: str):
         numbers = get_current_numbers(y if y.strip() else x).split()
         return tuple(sorted(Fraction(number) for number in numbers))
@@ -191,6 +211,10 @@ class Game24Task(Task):
         else:
             is_correct, updated_new_proposal = check_and_fix_last_line(new_proposal, x)
         return is_correct, updated_new_proposal
+
+    @staticmethod
+    def on_no_valid_candidates(y) -> list[str]:
+        return []
 
     @staticmethod
     def pre_value_check(y, eval_rule):  # Whether it needs to generate the value

@@ -1,7 +1,13 @@
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from typing import Callable, Tuple, List, Optional
+from typing import Callable, List, Tuple
+from federated_mcts.models._inference_types import (
+    InferenceDependencies,
+    ModelProtocol,
+    TokenizerProtocol,
+    _default_model_loader,
+    _default_tokenizer_loader,
+)
 
 
 class UncertaintyInferenceFramework:
@@ -9,7 +15,12 @@ class UncertaintyInferenceFramework:
     基于transformers的推理框架，支持在生成过程中计算token级别的不确定度
     """
     
-    def __init__(self, model_name_or_path: str, device: str = "cuda"):
+    def __init__(
+        self,
+        model_name_or_path: str,
+        device: str = "cuda",
+        deps: InferenceDependencies | None = None,
+    ) -> None:
         """
         初始化推理框架
         
@@ -18,8 +29,12 @@ class UncertaintyInferenceFramework:
             device: 运行设备
         """
         self.device = device
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name_or_path).to(device)
+        tokenizer_loader = (
+            deps.tokenizer_loader if deps is not None else _default_tokenizer_loader
+        )
+        model_loader = deps.model_loader if deps is not None else _default_model_loader
+        self.tokenizer: TokenizerProtocol = tokenizer_loader(model_name_or_path)
+        self.model: ModelProtocol = model_loader(model_name_or_path).to(device)
         
         # 确保tokenizer有pad_token
         if self.tokenizer.pad_token is None:
@@ -95,7 +110,7 @@ class UncertaintyInferenceFramework:
                     next_token = torch.argmax(sampling_logits, dim=-1, keepdim=True)
                 
                 # 计算不确定度（使用原始logits和生成的token）
-                uncertainty = uncertainty_fn(logits, next_token.item())
+                uncertainty = uncertainty_fn(logits, int(next_token.item()))
                 token_uncertainties.append(uncertainty)
                 
                 # 添加新token

@@ -45,6 +45,7 @@ class BudgetAwareDQNController:
         epsilon: float = 1.0,
         seed: int = 0,
         checkpoint_path: str | None = None,
+        checkpoint_sha256: str | None = None,
         collect_without_checkpoint: bool = True,
         hidden_sizes=(64, 64),
         capacity: int = 10000,
@@ -65,8 +66,11 @@ class BudgetAwareDQNController:
                 state_dim=state_dim,
                 action_count=action_count,
                 hidden_sizes=hidden_sizes,
+                expected_sha256=checkpoint_sha256,
             )
             if result.status is CheckpointStatus.RESTORED:
+                if result.state_dict is None:
+                    raise CheckpointConfigurationError("restored checkpoint has no model state")
                 self.q_network.load_state_dict(result.state_dict["model"])
                 self.checkpoint_status = CheckpointStatus.RESTORED
                 self.training_active = True
@@ -109,6 +113,9 @@ class BudgetAwareDQNController:
         latency_consumed: float,
         latency_budget: float,
         previous_joint_rank: bool | None = None,
+        task_optimal_length: int | None = None,
+        current_remaining_distance: int | None = None,
+        previous_beam_width: int | None = None,
     ) -> ActionDecision:
         state = extract_state_features(
             candidates=candidates,
@@ -121,6 +128,9 @@ class BudgetAwareDQNController:
             latency_consumed=latency_consumed,
             latency_budget=latency_budget,
             previous_joint_rank=previous_joint_rank,
+            task_optimal_length=task_optimal_length,
+            current_remaining_distance=current_remaining_distance,
+            previous_beam_width=previous_beam_width,
         )
         if state.shape[0] != self.state_dim:
             padded = np.zeros(self.state_dim, dtype=np.float32)

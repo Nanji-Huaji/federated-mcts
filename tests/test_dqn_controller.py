@@ -23,7 +23,7 @@ _EXPECTED_KEYS = {"state", "action", "reward", "next_state", "done", "beam", "jo
 
 def _controller(seed, epsilon=1.0, **kwargs):
     return BudgetAwareDQNController(
-        state_dim=12,
+        state_dim=16,
         action_count=ACTION_COUNT,
         epsilon=epsilon,
         seed=seed,
@@ -35,7 +35,7 @@ class TestSeededEpsilonGreedy(unittest.TestCase):
     def test_same_seed_yields_same_action_sequence(self):
         """Given two controllers with the same seed, when both draw a sequence
         of epsilon-greedy actions, then the sequences are identical."""
-        state = np.zeros(12, dtype=np.float32)
+        state = np.zeros(16, dtype=np.float32)
         first = _controller(seed=42)
         second = _controller(seed=42)
 
@@ -47,7 +47,7 @@ class TestSeededEpsilonGreedy(unittest.TestCase):
     def test_different_seed_yields_different_action_sequence(self):
         """Given two controllers with different seeds, when both draw a
         sequence of epsilon-greedy actions, then the sequences diverge."""
-        state = np.zeros(12, dtype=np.float32)
+        state = np.zeros(16, dtype=np.float32)
         first = _controller(seed=1)
         second = _controller(seed=2)
 
@@ -61,7 +61,7 @@ class TestSeededEpsilonGreedy(unittest.TestCase):
         argmax of the Q network's output for that state."""
         torch.manual_seed(0)
         controller = _controller(seed=0, epsilon=0.0)
-        state = np.linspace(0.1, 0.9, 12).astype(np.float32)
+        state = np.linspace(0.1, 0.9, 16).astype(np.float32)
         q_values = controller.q_network(torch.tensor(state)).detach().numpy()
         expected = int(np.argmax(q_values))
 
@@ -72,7 +72,7 @@ class TestSeededEpsilonGreedy(unittest.TestCase):
 class TestControllerDecision(unittest.TestCase):
     def test_decision_state_precedes_action_and_uses_structure_only(self):
         """Given candidate structure, previous value stats and budgets, when
-        the controller decides, then the returned state is 12-dim, finite and
+        the controller decides, then the returned state is 16-dim, finite and
         derived from pre-decision information only (no current-step values)."""
         decision = _controller(seed=3, epsilon=0.0).decide(
             candidates=["a", "b", "b"],
@@ -86,7 +86,7 @@ class TestControllerDecision(unittest.TestCase):
             latency_budget=10.0,
         )
 
-        self.assertEqual(decision.state.shape, (12,))
+        self.assertEqual(decision.state.shape, (16,))
         self.assertTrue(np.all(np.isfinite(decision.state)))
         beam, joint_rank = beam_and_joint_rank(decision.action)
         self.assertEqual(decision.beam, beam)
@@ -98,8 +98,8 @@ class TestControllerDecision(unittest.TestCase):
         """Given a recorded transition, when exported, then every documented
         field is present and preserved."""
         controller = _controller(seed=5)
-        state = np.zeros(12, dtype=np.float32)
-        next_state = np.ones(12, dtype=np.float32)
+        state = np.zeros(16, dtype=np.float32)
+        next_state = np.ones(16, dtype=np.float32)
         controller.record_transition(
             state=state,
             action=3,
@@ -124,7 +124,7 @@ class TestCheckpointStartup(unittest.TestCase):
         then it reports the explicit collection-only status and does not
         train."""
         controller = BudgetAwareDQNController(
-            state_dim=12,
+            state_dim=16,
             action_count=ACTION_COUNT,
             seed=0,
             checkpoint_path="/nonexistent/controller.pt",

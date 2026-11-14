@@ -1,8 +1,14 @@
 from collections import Counter
+from typing import Tuple
 import re
 import math
 
-def check_and_fix_last_line(new_proposal: str, x: str = "") -> (bool, str):
+
+def game24_heuristic_product_check(numbers: list[int]) -> bool:
+    """Return whether a non-terminal state passes the product heuristic."""
+    return len(numbers) <= 1 or math.prod(numbers) >= 24
+
+def check_and_fix_last_line(new_proposal: str, x: str = "") -> Tuple[bool, str]:
     # Get the last two lines 获取最后的2次操作
     lines = new_proposal.strip().split('\n')
     last_line = lines[-1]
@@ -69,7 +75,10 @@ def check_and_fix_last_line(new_proposal: str, x: str = "") -> (bool, str):
         if b == 0:
             #print("Division by zero error.")
             return False, new_proposal
-        correct_result = a // b  # Use integer division
+        quotient, remainder = divmod(a, b)
+        if remainder != 0:
+            return False, new_proposal
+        correct_result = quotient
     else:
         return False, new_proposal
 
@@ -94,12 +103,6 @@ def check_and_fix_last_line(new_proposal: str, x: str = "") -> (bool, str):
 
     # Sort and form the new left numbers
     new_left_num = sorted(pre_left_list, key=int)
-    int_left_num =list(map(int, pre_left_list))
-    product = math.prod(int_left_num)
-    if(product<24):
-        return False, new_proposal
-
-    
     # Check if last_left_num matches the expected new_left_num
     if ',' in ' '.join(last_left_num) or new_left_num != last_left_num or false_result:
         updated_left_part = ' '.join(new_left_num)
@@ -116,7 +119,7 @@ def check_and_fix_last_line(new_proposal: str, x: str = "") -> (bool, str):
 
     return True, new_proposal
 
-def check_final_result(last_line: str, pre_line: str = "", x: str = "") -> (bool, str):
+def check_final_result(last_line: str, pre_line: str = "", x: str = "") -> Tuple[bool, str]:
     # Get the last two lines 获取最后的2次操作
     # lines = new_proposal.strip().split('\n')
     # last_line = lines[-1]
@@ -182,7 +185,10 @@ def check_final_result(last_line: str, pre_line: str = "", x: str = "") -> (bool
         if b == 0:
             #print("Division by zero error.")
             return False, last_line
-        correct_result = a // b  # Use integer division
+        quotient, remainder = divmod(a, b)
+        if remainder != 0:
+            return False, last_line
+        correct_result = quotient
     else:
         return False, last_line
 
@@ -209,8 +215,12 @@ def check_final_result(last_line: str, pre_line: str = "", x: str = "") -> (bool
     # Sort and form the new left numbers
     new_left_num = sorted(pre_left_list, key=int)
     
-    # Check if last_left_num matches the expected new_left_num
-    if new_left_num != last_left_num:
+    # Check if last_left_num matches the expected new_left_num.
+    # The remain-set is a multiset, so its printed order carries no meaning:
+    # compare by value multiset rather than by raw string-sequence equality.
+    # (Comparing `new_left_num != last_left_num` rejected every arithmetically
+    # correct step whose remain-set was not printed in ascending order.)
+    if sorted(last_left_num, key=int) != new_left_num:
         return False, last_line
     if ',' in ' '.join(last_left_num) or false_result:
         #print("The left part is incorrect. Fixing the left part.")
@@ -235,7 +245,7 @@ if __name__ == '__main__':
 
     x='1 1 4 6'
     final = '\n4 - 1 = 2 (left: 1 3 6)\n3 +6 = 9 (left: 1 9)\n\n1 * 9 = 9 (left: 9)\n\n'
-    final = final.split('\n')
+    final_lines = final.split('\n')
     final_list = list(filter(None, final))
     print(final_list)
     for idx, line in enumerate(final_list):

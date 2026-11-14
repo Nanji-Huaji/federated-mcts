@@ -8,7 +8,10 @@ map_location and weights-only deserialization.
 
 from __future__ import annotations
 
+import hashlib
+import io
 import os
+from pathlib import Path
 from dataclasses import dataclass
 from enum import Enum
 
@@ -69,10 +72,18 @@ def load_checkpoint(
     state_dim: int,
     action_count: int,
     hidden_sizes,
+    expected_sha256: str | None = None,
 ) -> CheckpointLoadResult:
-    if not os.path.exists(path):
+    try:
+        data = Path(path).read_bytes()
+    except FileNotFoundError:
+        if expected_sha256 is not None:
+            raise CheckpointConfigurationError("Prepared DQN checkpoint is missing") from None
         return CheckpointLoadResult(CheckpointStatus.COLLECTION_ONLY, None, None)
-    payload = torch.load(path, map_location="cpu", weights_only=True)
+    if expected_sha256 is not None and hashlib.sha256(data).hexdigest() != expected_sha256:
+        raise CheckpointConfigurationError("DQN checkpoint changed after preparation")
+    # Hash and deserialize the same bytes, never reopen a mutable path after verification.
+    payload = torch.load(io.BytesIO(data), map_location="cpu", weights_only=True)
     metadata = payload.get("metadata") or {}
     if _metadata_mismatch(metadata, state_dim=state_dim, action_count=action_count, hidden_sizes=hidden_sizes):
         raise CheckpointMetadataError(

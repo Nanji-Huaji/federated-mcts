@@ -1,4 +1,7 @@
-python merged_run.py \
+#!/usr/bin/env bash
+set -euo pipefail
+
+PYTHONPATH=src .venv/bin/python -m federated_mcts \
     --task game24 \
     --task_start_index 200 \
     --task_end_index 210 \
@@ -10,4 +13,4 @@ python merged_run.py \
     --solve_method tot \
     --n_evaluate_sample 3 \
     --n_select_sample 5 \
-    ${@}
+    "$@"

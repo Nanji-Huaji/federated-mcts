@@ -42,9 +42,10 @@ class ReplayBuffer:
         states = torch.stack([self._states[i] for i in indices])
         actions = torch.tensor([self._actions[i] for i in indices], dtype=torch.long)
         rewards = torch.tensor([self._rewards[i] for i in indices], dtype=torch.float32)
-        next_states = torch.stack([
-            self._next_states[i] if self._next_states[i] is not None else torch.zeros(state_dim)
-            for i in indices
-        ])
+        sampled_next_states: list[torch.Tensor] = []
+        for i in indices:
+            next_state = self._next_states[i]
+            sampled_next_states.append(torch.zeros(state_dim) if next_state is None else next_state)
+        next_states = torch.stack(sampled_next_states)
         dones = torch.tensor([1.0 if self._dones[i] else 0.0 for i in indices], dtype=torch.float32)
         return states, actions, rewards, next_states, dones

@@ -38,16 +38,6 @@ class JSONLTransitionRecorder:
             handle.write(json.dumps(_to_plain(transition)) + "\n")
             handle.flush()
 
-    def replace_last(self, transition: dict) -> None:
-        records = self.read_all()
-        if not records:
-            self.record(transition)
-            return
-        records[-1] = transition
-        with open(self.path, "w", encoding="utf-8") as handle:
-            for record in records:
-                handle.write(json.dumps(_to_plain(record)) + "\n")
-
     def read_all(self) -> list[dict]:
         try:
             with open(self.path, "r", encoding="utf-8") as handle:

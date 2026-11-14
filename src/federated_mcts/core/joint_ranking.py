@@ -2,7 +2,7 @@ import json
 import math
 from typing import Hashable
 
-from federated_mcts.core.evaluation import get_values
+from federated_mcts.core.evaluation import EvaluatorValueCache, get_values
 from federated_mcts.core.search_policy import state_key
 
 
@@ -48,6 +48,7 @@ def evaluate_ranked_candidates(
     evaluator_id: str,
     cache: dict[CacheKey, float],
     joint_rank: bool,
+    value_cache: EvaluatorValueCache | None = None,
 ) -> list[float]:
     values: list[float | None] = [None] * len(candidates)
     missing_ids: list[int] = []
@@ -65,10 +66,14 @@ def evaluate_ranked_candidates(
     if missing_candidates and scores is None:
         scores = get_values(
             args, task, x, missing_candidates, args.n_evaluate_sample, client=client,
+            cache=value_cache, evaluator_identity=evaluator_id,
         )
 
     for index, score in zip(missing_ids, scores or []):
-        numeric_score = float(score)
+        if score is None:
+            numeric_score = 0.0
+        else:
+            numeric_score = float(score)
         values[index] = numeric_score
         cache[(task_id, evaluator_id, state_key(task, x, candidates[index]))] = numeric_score
-    return [float(value) for value in values]
+    return [0.0 if value is None else float(value) for value in values]

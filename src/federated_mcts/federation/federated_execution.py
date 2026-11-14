@@ -1,18 +1,66 @@
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextvars import copy_context
+from typing import TYPE_CHECKING, Hashable, TypedDict
 from federated_mcts.utils.exhaustive import assert_never
 
 from federated_mcts.core.evaluation import get_values, get_votes
 from federated_mcts.core.generation import get_proposals, get_samples
+from federated_mcts.core.search_policy import state_key
 from federated_mcts.utils.uncertainty import Uncertainty
+from federated_mcts.federation.standard_solvers import GenerationClient, StandardSolverArgs
+from federated_mcts.federation.time_tracker import ClientTiming
+
+
+class ClientStepInfo(TypedDict):
+    solve_client_name: str
+    eval_client_name: str
+    input_ys: list[str]
+    output_ys: list[str]
+    # Candidates that actually received a value; ``values`` is aligned to
+    # this list.  In baseline/diverse modes every output was scored; the DQN
+    # session may deduplicate and truncate, and unscored candidates must not
+    # be reported as a 0.0 score.
+    scored_ys: list[str]
+    values: list[float]
+    step: int
+
+
+def attach_dqn_scores(task, x: str, candidates: list[str], values: list[float],
+                      step_infos: list[ClientStepInfo]) -> None:
+    """Map the DQN session's scored candidates back onto their source clients.
+
+    Scores are keyed by canonical state, so two clients that proposed the same
+    state both receive that one score.  Candidates the session never scored
+    (deduplicated away or cut by the evaluation budget) are simply absent from
+    ``scored_ys``/``values``; they are not turned into 0.0 rewards.
+    """
+    score_by_state: dict[Hashable, float] = {}
+    for candidate, value in zip(candidates, values):
+        score_by_state[state_key(task, x, candidate)] = float(value)
+    for info in step_infos:
+        scored = [
+            (candidate, score_by_state[state_key(task, x, candidate)])
+            for candidate in info.get("output_ys", [])
+            if state_key(task, x, candidate) in score_by_state
+        ]
+        info["scored_ys"] = [candidate for candidate, _ in scored]
+        info["values"] = [value for _, value in scored]
 
 
 class FederatedExecutionMixin:
+    args: StandardSolverArgs
+    gpts: dict[str, GenerationClient]
+
+    if TYPE_CHECKING:
+        # Supplied by the search-session owner (StandardSolversMixin).
+        def evaluator_cache(self, task, evaluator_id: str, client, input_text: str | None = None): ...
+
     def _run_assignments(self, task, x, step, task_assignments, to_print, n_gen):
-        all_new_ys = []
-        all_values = []
-        step_infos = []
-        step_client_times = {}
+        all_new_ys: list[str] = []
+        all_values: list[float] = []
+        step_infos: list[ClientStepInfo] = []
+        step_client_times: dict[str, ClientTiming] = {}
 
         jobs = [(index, assignment) for index, assignment in enumerate(task_assignments) if assignment["ys"]]
         if not jobs:
@@ -22,15 +70,19 @@ class FederatedExecutionMixin:
         futures = {}
         with ThreadPoolExecutor(max_workers=len(jobs)) as executor:
             for original, assignment in jobs:
+                # Each worker gets its own Context, sharing only this run's
+                # thread-safe usage tracker (never a process-global reset).
                 future = executor.submit(
-                    self._client_step,
+                    copy_context().run, self._client_step,
                     task, x, assignment["ys"], step,
                     assignment["solve_client"], assignment["eval_client"],
                     to_print, n_generate_sample=n_gen,
                 )
                 futures[future] = positions[original]
 
-            results = [None] * len(jobs)
+            results: list[tuple[list[str], list[float], ClientStepInfo, ClientTiming]] = [
+                ([], [], {"solve_client_name": "", "eval_client_name": "", "input_ys": [], "output_ys": [], "scored_ys": [], "values": [], "step": 0}, {"generation": 0.0, "evaluation": 0.0})
+            ] * len(jobs)
             for future in as_completed(futures):
                 results[futures[future]] = future.result()
 
@@ -59,7 +111,7 @@ class FederatedExecutionMixin:
         )
         solve_gpt = self.gpts[solve_client_name]
         eval_gpt = self.gpts[eval_client_name]
-        new_ys = []
+        new_ys: list[str] = []
         n_gen = n_generate_sample if n_generate_sample else self.args.n_generate_sample
 
         generation_start = time.time()
@@ -97,18 +149,23 @@ class FederatedExecutionMixin:
         elif new_ys and self.args.method_evaluate == "vote":
             values = get_votes(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
         elif new_ys and self.args.method_evaluate == "value":
-            values = get_values(self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt)
+            values = get_values(
+                self.args, task, x, new_ys, self.args.n_evaluate_sample, client=eval_gpt,
+                cache=self.evaluator_cache(task, eval_client_name, eval_gpt, x),
+                evaluator_identity=eval_client_name,
+            )
         elif new_ys:
             values = [1.0] * len(new_ys)
         else:
             values = []
         evaluation_time = time.time() - evaluation_start
 
-        client_info = {
+        client_info: ClientStepInfo = {
             "solve_client_name": solve_client_name, "eval_client_name": eval_client_name,
-            "input_ys": client_ys, "output_ys": new_ys, "values": values, "step": step,
+            "input_ys": client_ys, "output_ys": new_ys, "scored_ys": new_ys,
+            "values": values, "step": step,
         }
-        client_times = {"generation": generation_time, "evaluation": evaluation_time}
+        client_times: ClientTiming = {"generation": generation_time, "evaluation": evaluation_time}
 
         if to_print:
             print(

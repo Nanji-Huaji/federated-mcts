@@ -37,7 +37,15 @@ class VLLMClient:
         self.max_tokens = max_tokens
         self.extra_params = kwargs
 
-    def __call__(self, args, prompt, n=1, stop=None, **kwargs):
+    def __call__(
+        self,
+        args: object,
+        prompt: str,
+        n: int = 1,
+        stop: str | list[str] | None = None,
+        get_logprobs: bool = False,
+        **kwargs,
+    ) -> list[str]:
         """Call vLLM endpoint via the OpenAI-compatible API."""
         return gpt(
             args,
