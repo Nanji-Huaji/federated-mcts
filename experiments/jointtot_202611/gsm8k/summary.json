@@ -1,0 +1,301 @@
+{
+  "by_arm": {
+    "speculative_solve": {
+      "all_slots_unparseable_indices": [
+        8,
+        13,
+        14,
+        15,
+        20,
+        33,
+        38,
+        39
+      ],
+      "archived_labels_reproduced_by_historical_code": 133,
+      "archived_sidecar": {
+        "acc": "0.84",
+        "avg_sum": "1.86",
+        "llm": "deepseek-v3",
+        "sm": "qwen2.5-32b-instruct"
+      },
+      "first_saved_slot_correct_questions": {
+        "archived": 37,
+        "current_checkout": 22,
+        "frozen": 35
+      },
+      "frozen_parse_status_counts": {
+        "answer_phrase": 0,
+        "conflict": 0,
+        "formal": 93,
+        "malformed_declaration": 3,
+        "no_answer": 37,
+        "terminal_scalar": 0
+      },
+      "histogram_beam_size": {
+        "1": 8,
+        "2": 1,
+        "3": 41
+      },
+      "mean_within_item_fraction_correct": {
+        "archived": 0.7033333333333334,
+        "current_checkout": 0.37,
+        "frozen": 0.6633333333333333
+      },
+      "number_correct_candidates": {
+        "archived": 93,
+        "current_checkout": 43,
+        "frozen": 87
+      },
+      "old0_frozen1_candidate_count": 0,
+      "old0_frozen1_item_indices": [],
+      "old1_frozen0_candidate_count": 6,
+      "old1_frozen0_item_indices": [
+        15,
+        38
+      ],
+      "primary_any_correct_questions": {
+        "archived": 42,
+        "current_checkout": 33,
+        "frozen": 40
+      },
+      "saved_candidates": 133
+    },
+    "tot": {
+      "all_slots_unparseable_indices": [
+        8,
+        13,
+        20,
+        25,
+        33,
+        37,
+        39
+      ],
+      "archived_labels_reproduced_by_historical_code": 144,
+      "archived_sidecar": {
+        "acc": "0.8",
+        "avg_sum": "2.12",
+        "llm": "deepseek-v3",
+        "sm": "qwen2.5-32b-instruct"
+      },
+      "first_saved_slot_correct_questions": {
+        "archived": 40,
+        "current_checkout": 21,
+        "frozen": 42
+      },
+      "frozen_parse_status_counts": {
+        "answer_phrase": 0,
+        "conflict": 0,
+        "formal": 114,
+        "malformed_declaration": 0,
+        "no_answer": 30,
+        "terminal_scalar": 0
+      },
+      "histogram_beam_size": {
+        "1": 3,
+        "3": 47
+      },
+      "mean_within_item_fraction_correct": {
+        "archived": 0.7466666666666667,
+        "current_checkout": 0.36666666666666664,
+        "frozen": 0.78
+      },
+      "number_correct_candidates": {
+        "archived": 106,
+        "current_checkout": 49,
+        "frozen": 111
+      },
+      "old0_frozen1_candidate_count": 5,
+      "old0_frozen1_item_indices": [
+        2,
+        17
+      ],
+      "old1_frozen0_candidate_count": 0,
+      "old1_frozen0_item_indices": [],
+      "primary_any_correct_questions": {
+        "archived": 40,
+        "current_checkout": 36,
+        "frozen": 42
+      },
+      "saved_candidates": 144
+    }
+  },
+  "decision": "Archival scoring and the frozen exact rule rank the arms in opposite directions on these same texts. The fixed-run paired interval includes zero. The speculative run logged fewer tokens/calls at a lower estimated fee, but the data do not establish a quality win, equivalent accuracy, total deployment cost advantage, or a latency advantage.",
+  "files": {
+    "all_candidates": "candidates.jsonl",
+    "evidence": "audit.json",
+    "items": "outcomes.jsonl",
+    "parse_failures_and_judgement_differences": "review.jsonl",
+    "per_pair_resources": "resources.jsonl",
+    "source_hashes": "source_manifest.json"
+  },
+  "independence": "No credible independent blind replication. At the compatible historical commit, no dynamic per-item gold lookup found in the solver; some reachable prompt examples include answers to the evaluated tasks. One fixed run per arm; provenance and request-level telemetry incomplete.",
+  "interval": "95% paired question percentile bootstrap, exact enumeration under empirical exchangeability; conditional on these runs, not over seeds or a random holdout",
+  "paired_any": {
+    "archived": {
+      "both_correct": 39,
+      "exact_two_sided_mcnemar_p": 0.625,
+      "n_pairs": 50,
+      "neither_correct": 7,
+      "paired_percentile_95_pp": [
+        -4.0,
+        12.0
+      ],
+      "spec_minus_tot_pp": 4.0,
+      "spec_minus_tot_questions": 2,
+      "speculative_solve_correct": 42,
+      "speculative_solve_only": 3,
+      "speculative_solve_only_indices": [
+        2,
+        17,
+        25
+      ],
+      "tot_correct": 40,
+      "tot_only": 1,
+      "tot_only_indices": [
+        14
+      ]
+    },
+    "current_checkout": {
+      "both_correct": 28,
+      "exact_two_sided_mcnemar_p": 0.5810546875,
+      "n_pairs": 50,
+      "neither_correct": 9,
+      "paired_percentile_95_pp": [
+        -20.0,
+        8.0
+      ],
+      "spec_minus_tot_pp": -6.0,
+      "spec_minus_tot_questions": -3,
+      "speculative_solve_correct": 33,
+      "speculative_solve_only": 5,
+      "speculative_solve_only_indices": [
+        4,
+        25,
+        30,
+        35,
+        43
+      ],
+      "tot_correct": 36,
+      "tot_only": 8,
+      "tot_only_indices": [
+        0,
+        1,
+        5,
+        14,
+        16,
+        28,
+        46,
+        48
+      ]
+    },
+    "frozen": {
+      "both_correct": 39,
+      "exact_two_sided_mcnemar_p": 0.625,
+      "n_pairs": 50,
+      "neither_correct": 7,
+      "paired_percentile_95_pp": [
+        -12.0,
+        4.0
+      ],
+      "spec_minus_tot_pp": -4.0,
+      "spec_minus_tot_questions": -2,
+      "speculative_solve_correct": 40,
+      "speculative_solve_only": 1,
+      "speculative_solve_only_indices": [
+        25
+      ],
+      "tot_correct": 42,
+      "tot_only": 3,
+      "tot_only_indices": [
+        14,
+        15,
+        38
+      ]
+    }
+  },
+  "primary": "frozen.any: >=1 of the saved final ys (not best intermediate branch); no-answer/conflict included as incorrect",
+  "protocol_v1_sha256": {
+    "PROTOCOL.md": "9acffdc4c3780e991e07f8b22edb9786910113ce85702c43295927ccbef4c143",
+    "extractor.py": "ca7ae95cf643a16b3e45c5d349cbd026b83ce952a1b5f0bd4deed8b2fdadf335",
+    "test_extractor.py": "01805d9e2bf072374e406c63975c8409de2b4252b5fa6aea7f505e845c4dbe28"
+  },
+  "reference_source": "Full-text pair identity at the dataset level, not attested per-run runtime gold snapshots. See audit.json.",
+  "resources_historical": {
+    "all_models_reduction_percent_relative_to_tot": {
+      "completion_tokens": 26.5844,
+      "cost": 19.7881,
+      "prompt_tokens": 18.8077,
+      "total_calls": 19.9219,
+      "total_tokens": 19.3309
+    },
+    "all_models_spec_minus_tot": {
+      "completion_tokens": -20810,
+      "cost": "-0.245732",
+      "prompt_tokens": -204112,
+      "total_calls": -408,
+      "total_tokens": -224922
+    },
+    "timing": "no comparable wall-time / item-latency measurement",
+    "totals": {
+      "speculative_solve": {
+        "all_models": {
+          "completion_tokens": 57469,
+          "cost": "0.996082",
+          "prompt_tokens": 881144,
+          "total_calls": 1640,
+          "total_tokens": 938613
+        },
+        "by_model": {
+          "deepseek-v3": {
+            "completion_tokens": 29814,
+            "cost": "0.787923",
+            "prompt_tokens": 728295,
+            "total_calls": 1261,
+            "total_tokens": 758109
+          },
+          "qwen2.5-32b-instruct": {
+            "completion_tokens": 27655,
+            "cost": "0.208159",
+            "prompt_tokens": 152849,
+            "total_calls": 379,
+            "total_tokens": 180504
+          }
+        },
+        "last_matches_performance": true,
+        "per_item_times_usable": false,
+        "repeated_run_time_fields_s": {
+          "evaluation": "1095.3615326881409",
+          "generation": "724.4432144165039"
+        },
+        "time_fields_identical_across_all_records": true
+      },
+      "tot": {
+        "all_models": {
+          "completion_tokens": 78279,
+          "cost": "1.241814",
+          "prompt_tokens": 1085256,
+          "total_calls": 2048,
+          "total_tokens": 1163535
+        },
+        "by_model": {
+          "deepseek-v3": {
+            "completion_tokens": 78279,
+            "cost": "1.241814",
+            "prompt_tokens": 1085256,
+            "total_calls": 2048,
+            "total_tokens": 1163535
+          }
+        },
+        "last_matches_performance": true,
+        "per_item_times_usable": false,
+        "repeated_run_time_fields_s": {
+          "evaluation": "0.0",
+          "generation": "0.0"
+        },
+        "time_fields_identical_across_all_records": true
+      }
+    },
+    "unit_of_cost": "estimated yuan at repository fallback rates, not a bill"
+  },
+  "task": "GSM8K retrospective rescore of 50 paired archived items; no new inference"
+}

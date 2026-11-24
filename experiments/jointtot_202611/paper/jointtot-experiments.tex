@@ -1,0 +1,69 @@
+% JointToT evidence update. Generated from the archived audits and new local scores.
+\section{Experiments}
+\label{sec:jt-experiments}
+We ask whether assigning work to a smaller model reduces cloud use, and whether a larger evaluator selects better branches. We distinguish three measurements: end-to-end solutions in archived runs, alternative choices on fixed historical candidate pools, and fresh model scores on a validation pilot. Results from different puzzles, beam widths or model pairs are not pooled.
+
+\subsection{Cloud use and solutions on Game of 24}
+We matched the four input numbers at all three depths for 30 consecutive archived puzzles (zero-based IDs 900--929). The beam kept ten trajectories. DeepSeek-V3 served as the cloud model. The two split configurations used Qwen2.5-32B-Instruct to propose steps and the cloud model to evaluate them; warm start assigned the first layer to the cloud model. We replayed each saved trajectory from the four input numbers, checked each operation and remaining multiset without repair, and required the final singleton to be 24. A puzzle counts once if at least one retained trajectory passes. We also report how often the first retained trajectory alone passes.
+
+\begin{table}[tb]
+\centering\small
+\caption{Game of 24: solved puzzles out of 30, recorded cloud calls, and total estimated cloud charges for the cohort (CNY, historical rate card). Local inference is excluded from the fee column.}
+\label{tab:jt-cloud}
+\setlength{\tabcolsep}{3.5pt}
+\begin{tabular}{@{}lrrrr@{}}\toprule
+Assignment & First & Any of 10 & Calls & Fee \\ \midrule
+All cloud & 14 & 26 & 3,447 & 2.136 \\
+Edge proposes & 13 & 23 & 1,467 & 1.326 \\
+Edge + warm start & 13 & 25 & 1,444 & 1.293 \\
+\bottomrule\end{tabular}
+\end{table}
+
+Relative to all-cloud search, warm start reduced the estimated cloud charges by 39.45\% while solving one fewer puzzle (paired difference -3.33 points, descriptive 95\% bootstrap interval $[-13.33, +6.67]$). It solved one puzzle missed by all-cloud search and missed two solved by all-cloud search. The ledger also contains 875,875 smaller-model tokens for warm start. The cloud saving would pay for at most CNY~0.8427 of additional local serving cost on these 30 puzzles. GPU hours and energy were not measured; the charges in Table~\ref{tab:jt-cloud} are neither invoices nor total deployment costs.
+
+\subsection{Does the tree beat repeated complete answers?}
+On a different cohort of 148 archived puzzles, we compared two DeepSeek-V3 pipelines: repeated complete answers with an external terminal verifier, and a full all-cloud tree. The original recipe and data snapshot agree with the inputs at every tree layer; the responses are tied to their runs, but individual request prompts and independent seeds are unavailable. We checked the final expression of each complete answer and the complete trace of each retained tree output using the same four-number, nonnegative-integer and exact-division rules. The first one, three and ten complete answers solved 77, 106 and 130 puzzles. The full tree solved 132 (tree minus ten answers: +1.35 points, paired 95\% interval $[-3.38, +6.08]$). The ten-answer baseline used 1,480 calls and cost an estimated CNY~1.31; the tree used 16,048 calls at CNY~10.93 (8.34 times as much). These are recorded budgets, not equal-compute runs; sampling was not stopped early when an answer passed. The comparison motivates retaining complete-answer sampling as a baseline for any budgeted search policy.
+
+\subsection{Where are viable branches lost?}
+In a separate single-model validation run (Qwen3.7-plus, depth three, beam two), the original search solved 51 of 200 puzzles. We froze the historical parents, candidates and votes at depths 0 and 1 (the first two selection steps). After each selection we checked whether the original pool contained a legal prefix from which 24 could still be reached with the remaining steps, nonnegative integers and exact division. The search rules below never saw these labels. We report the fraction of such pools where the two retained candidates included a viable prefix. This is not an end-to-end solve rate.
+
+\begin{table}[tb]
+\centering\small
+\caption{Recorded candidate pools with a viable state retained. The denominators are the original pools containing any viable state, not the number of candidates. The lottery row is an exact expectation.}
+\label{tab:jt-replay}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}lrr@{}}\toprule
+Selection rule & First (of 199) & Second (of 118) \\ \midrule
+Recorded votes & 131 & 51 \\
+Remove unchanged parent & 131 & 56 \\
+Merge equal states & 131 & 52 \\
+Remove + merge & 131 & 57 \\
+Lottery on zero votes & 129.26 & 53.09 \\
+\bottomrule\end{tabular}
+\end{table}
+
+Preserving the original order on ties reproduced every recorded top-two decision. Dropping a nonterminal candidate identical to its parent accounted for five of the six additional second-step hits; merging equal remaining-number multisets (retaining the highest vote) accounted for one. Together they gained 6 and lost 0 of the same 118 eligible pools (+5.08 points, paired 95\% bootstrap interval $[+1.69, +9.32]$). No deterministic rule changed first-step retention. A discarded branch has no recorded continuation, so these changes cannot be counted as extra solved puzzles.
+
+\subsection{A fresh paired test of evaluator size}
+We used the repository's fixed 20-puzzle validation pilot drawn from the same 200 puzzles, not a new held-out set. At each root we checked move legality, collapsed equivalent remaining triples, then chose four by a fixed hash order without votes or solvability labels. Local Qwen2.5-7B-Instruct and 32B-Instruct scored the same four choices using next-token logits for the answer letters. We ran both the prespecified order and its reversal, yielding 80 fresh model--prompt evaluations in total. Only after scoring did we label which triples could still reach 24. 18 of the 20 pools contained such a choice; choosing one of the four uniformly would hit 9.5 puzzles in expectation.
+
+\begin{table}[tb]
+\centering\small
+\caption{Local evaluator pilot: puzzles retaining a viable candidate, out of 20. Reversal changes presentation only. Last column: same top choice across the two orders.}
+\label{tab:jt-judges}
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}lrrrr@{}}\toprule
+& \multicolumn{2}{c}{Original order} & Reversed & Same \\
+Model & Top 1 & Top 2 & Top 1 & choice \\ \midrule
+7B & 8 & 15 & 12 & 1 \\
+32B & 15 & 17 & 12 & 12 \\
+\bottomrule\end{tabular}
+\end{table}
+
+The primary top-one comparison gave 8 puzzles uniquely to 32B and 1 uniquely to 7B (32B minus 7B: +35.00 points, paired 95\% interval $[+10.00, +60.00]$). Reversing the options erased the top-one gap: both models hit 12 of 20. The size effect depends on presentation. These judgments do not change the candidate generator, expand a new branch or measure a deployed API's latency.
+
+\subsection{GSM8K: sensitivity to answer extraction}
+We re-scored the saved beams of two archived runs on the same 50 GSM8K word problems~\cite{cobbe2021gsm8k}. We fixed the extractor before this comparison: it prefers explicitly declared answers, checks the exact numeric value and rejects malformed or conflicting declarations rather than guessing a number from the explanation. All 50 puzzles remain in each denominator. The historical labels gave 40/50 for all-cloud ToT and 42/50 for the split. On the same outputs our rule gave 42/50 and 40/50, respectively (split minus all-cloud -4.00 points, paired 95\% interval $[-12.00, +4.00]$). Among the changed judgments the old rule truncated thousands-separated answers; the stricter rule also rejected one response with an empty declaration despite a later correct answer. The split used 938,613 tokens across both models versus 1,163,535 for the all-cloud run. Fewer tokens did not establish a quality advantage.
+
+\subsection{Limitations}
+The archived comparisons use fixed problem lists rather than a blinded holdout. Search configurations lack independent repeated runs. Historical GSM8K prompt examples overlapped some evaluated questions. Intervals resample paired puzzles, not model seeds, and the evaluator-size pilot uses early, relatively easy validation items. Yao et al.~\cite[App.~B.2]{yao2023tree} found that reversing the generator and evaluator roles mattered on Game of 24. We do not replicate that role swap at matched cost, or measure end-to-end local cost and latency. We therefore make no noninferiority, total-cost or speedup claim.

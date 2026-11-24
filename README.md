@@ -1,246 +1,87 @@
-# Federated Monte Carlo Tree Search for Large Language Model Inference
+# JointToT: Allocating Cloud Calls in Tree-of-Thought Search
 
-<p>
-    <a href="https://badge.fury.io/py/tree-of-thoughts-llm">
-        <img src="https://badge.fury.io/py/tree-of-thoughts-llm.svg">
-    </a>
-    <a href="https://www.python.org/">
-        <img alt="Build" src="https://img.shields.io/badge/Python-3.7+-1f425f.svg?color=purple">
-    </a>
-    <a href="https://copyright.princeton.edu/policy">
-        <img alt="License" src="https://img.shields.io/badge/License-MIT-blue">
-    </a>
-</p>
+JointToT asks where a cloud model is worth using: to **propose** the next reasoning step, or to **score** steps proposed by a smaller model. This repository contains the search code and the evidence behind the working paper. On 30 Game24 puzzles, using the cloud to propose only the first layer reduced **estimated cloud charges by 39.45%** relative to all-cloud search; it solved 25 puzzles rather than 26. A separate comparison suggests a cheaper baseline worth trying first: generate several complete answers and check them.
 
-![teaser](pics/federated.png)
+[Run one puzzle offline](#quickstart) · [Results](#results) · [English experiment section (PDF)](experiments/jointtot_202611/paper/JointToT-experiments.pdf) · [Experiment guide / 中文复现说明](experiments/jointtot_202611/README.md)
 
+## How it works
 
-## Introduction
+[![JointToT workflow: propose moves, pool and score candidates, then retain the next beam. An example shows a retained solution and a pruned sibling.](experiments/jointtot_202611/paper/figure-workflow/author/jointtot-workflow-en.png)](experiments/jointtot_202611/paper/figure-workflow/author/jointtot-workflow-en.svg)
 
-### Acknowledgment
+In Game24, a state is the multiset of numbers still available. For each retained path, the proposer combines two numbers. Candidates from **all** parents are pooled and scored; the controller keeps up to the beam width for the next layer. In the [trace shown above](experiments/jointtot_202611/paper/figure-workflow/trace.json), two moves from `{6, 10, 20}` were legal. The branch starting with `10 − 6` went on to reach `4 + 20 = 24`. The branch starting with `6 + 10` ranked 11th and missed the beam of ten. Final arithmetic verification is separate from the model score.
 
-This repository is based on the foundation of [Tree of Thoughts: Deliberate Problem Solving with Large Language Models](https://proceedings.neurips.cc/paper_files/paper/2023/file/271db9922b8d1f4dd7aaef84ed5ac703-Paper-Conference.pdf), whose official repository is [https://github.com/princeton-nlp/tree-of-thought-llm](https://github.com/princeton-nlp/tree-of-thought-llm). Thanks for their high-quality codes!
-
-### Demo
-
-A demo for this work is comming soon.
-
-### Background
-
-Yao et al.'s work demonstrates the potential of the Monte Carlo Search Tree (MCST) method in solving problems like 24-point, crossword puzzles, and creative writing. This method achieves remarkable results in tasks requiring deep thought by exploring multiple reasoning paths and evaluating them with the model. They propose a reasoning framework called Tree-of-Thought (ToT), which decomposes problems into intermediate steps ("thoughts"), generates multiple possible solutions at each step, screens out the most promising paths through self-evaluation, and combines strategies like breadth-first search (BFS) or depth-first search (DFS) for systematic exploration and backtracking. This helps language models find optimal solutions to complex problems and significantly enhances their reasoning and planning abilities.
-
-While the MCTS method has made significant progress in tasks like 24-point that require deep thought, it is computationally expensive because it needs to generate and evaluate multiple thoughts. For example, solving a 24-point task with GPT-4o alone consumes thousands to tens of thousands of tokens. Moreover, when using smaller models, the accuracy of the MCTS method drops significantly, similar to the Chain-of-Thought (CoT) method. In CoT reasoning, smaller models have weaker generation capabilities and struggle to produce diverse and high-quality intermediate steps. In the MCTS method, smaller models also face limitations in evaluation capabilities, making it difficult to achieve usable performance.
-
-To address these issues, we propose the Federated MCTS method, a plug-and-play reasoning framework that supports joint reasoning by models of different scales. We noticed that the insufficient evaluation capabilities of smaller models are particularly prominent in the MCTS method, limiting their further application in MCTS. With our method, we achieved accuracy comparable to pure large models in the 24-point task while significantly reducing costs compared to pure large models. Specifically, we made the following modifications:
-
-- **Rule-enhanced Evaluation**: During evaluation, we assist the process with rules. We summarized some cases that can obviously complete 24-point, such as 1, 1, 1, 24 or 1, 1, 1, 8. When these cases are matched, they are assigned higher evaluation scores.
-
-- **Format Verification**: To ensure the accuracy of evaluation, we verify the thought format during generation, ensuring that all thoughts entering the evaluation have the correct format. During the generation phase, if a thought does not have the correct format, it will be discarded.
-
-- **Prompt Learning**: We adopted a different Prompt from the original ToT method, which significantly improved the accuracy.
-
-- **Federated Reasoning**: Federated Reasoning: We adopt a federated reasoning approach, which allows one or multiple distinct models to collaboratively participate in the reasoning process for the same task.
-
-
-## Method
-
-The steps of our method is the same as the original Tree-of-Thought framework, which are **decomposition, generation, evaluation, and selection**. For the 24-point task, we use breadth-first search while searching in the Monte Carlo tree. Like the original work, our work consists of a tree, whose node is a state $s=[t_i, z_1, ..., z_{n-1}]$ representing a partial solution with the input and the sequence of thoughts so far.
-
-### 1. Decomposition: 
-For each 24-point task $t_i$, each decomposition $z_j$ of $t_i$ is a line matching the pattern "number operator number = result (left: remaining numbers)" like
-```plaintext
-8 - 1 = 7 (left: 1 1 7)
-```
-
-### 2. Generation: 
-
-(1) Task Assignment: For state $s$ and model list $[m_1, ..., m_m]$, task assignment decomposes $s$ into a list of $s_1, ..., s_m$, and assign $s_l$ to model $m_l$.
-
-$$
-s_1, ..., s_m = \rm{TaskAssign}(s, m)
-$$
-   
-Where function $\rm{TaskAssign(·)}$ decomposes $s=[t_i, z_1, ..., z_{n-1}]$ to $s_r=[t_i, z_s, ..., z_t]$, where $t - s + 1 = \lfloor \frac{n-1}{m} \rfloor$.
-
-Specially, if $s=[t_i]$, i.e. there is no "thought" generated yet, initial generation will be used on the first model $m_1$, which is
-
-$$
-z_1, ..., z_k = G(s, p_{\theta}^{\rm{propose}}, k, m_1)
-$$
-
-Where thought generator $G(·)$ is introduced in the following paragraph.
-
-(2) Thought Generation: For each state $s$, generation strategy $p_e$, candidates number $k$ and generation model $m$, thought generator $G(s, p_e, k, m)$ generates $k$ candidates using the language model $m$. For the generation strategies, there are two strategies: sample and propose. 
-
-    (a) Sample: 
-    (b) Propose: 
-
-Considered the thought space in 24-point task is more constrained, we use propose strategy, which is formalizedly presented as: 
-
-$$
-[z^{(1)}, ..., z^{(k)}] \sim p_{\theta}^{\rm{propose}}(z^{(1...k)}_{i+1}|s)
-$$
-
-Thoughts generated by model $m_i$ is:
-
-$$
-T_i = G(s, p_{\theta}^{\rm{propose}}, k, m_i)
-$$
-
-(3) Format Verification: For each $z_j$, check whether it has the same format like the example hereinbefore.
-
-$$
-T_i' = \{ z_j \in T_i | \rm{FormatCheck}(z_j)=True \}
-$$
-
-Where FormatCheck($z_j$)=True if $z_j$​ matches the pattern "number operator number = result (left: remaining numbers)" otherwise​ False.
-
-(4) Thought Aggregation: Due to the thoughts $T_i$ is generated on different models, it is necessary to aggregate all the result, i.e.
-
-$$
-T= \cap_{i} T_i
-$$
-
-
-### 3. Evaluation
-
-(1) Strategies of Evaluation:
-
-    (a) Vote: 
-    (b) Value: 
-
-(2) Evaluation Task Assignment: Given the state $s$, model list $m_1, m_q$ (Where $q$ can be different to $m$ hereinafter). 
-
-(3) Assigning Score to each $z_j$
-
-(4) Rule-Enhanced Evaluation:
-## Expriments
+The paper studies **layered beam search**, not Monte Carlo rollouts or federated training. The distribution is still named `federated-mcts` (v0.2.0); its Python module is `federated_mcts`.
 
 ## Results
 
-## Installation
+**Does splitting the work reduce cloud use?** We rechecked the saved paths for the same [30 Game24 puzzles](experiments/jointtot_202611/archive_game24/README.md) (IDs 900–929). A puzzle counts as solved if **any** of its final ten retained paths verifies, not necessarily the first. DeepSeek-V3 scored candidates in all three runs; the edge proposer was Qwen2.5-32B-Instruct.
 
-The runnable package is `federated_mcts` (version `0.2.0`), built from the
-`src/` layout. Python 3.10 or newer is required.
+| Who proposes? | Solved / 30 | Cloud calls | Estimated cloud fee (CNY, all 30) |
+| --- | ---: | ---: | ---: |
+| Cloud at every layer | 26 | 3,447 | 2.136 |
+| Edge at every layer | 23 | 1,467 | 1.326 |
+| Cloud at layer 1, then edge (warm start) | 25 | 1,444 | 1.293 |
 
-```bash
-# HTTP/API runs: no torch or transformers are installed or imported.
-pip install -e .
+Warm start solved one puzzle the all-cloud run missed and missed two that it solved. The fees use historical token rates, not invoices; they exclude local inference, and the runs have no comparable latency measurements. This is not evidence of equal accuracy or lower total deployment cost.
 
-# Local vLLM inference and DQN search need the optional ML backends.
-pip install -e ".[local]"
-```
-
-`src/tot/` is kept in the checkout as legacy reference material. It is **not**
-part of the distribution; setuptools is configured to package only
-`federated_mcts`, and `MANIFEST.in` carries only `src/federated_mcts/data`.
-The HTTP model clients, Game24 runner, and experiment runner must remain
-importable without `torch` or `transformers`.
-
-For a source checkout without installation, put `src` on `PYTHONPATH`:
-
-```bash
-PYTHONPATH=src .venv/bin/python -m federated_mcts --help
-```
-
-## Usage
-
-The canonical entry points are:
-
-| Entry point | Equivalent | Purpose |
-| --- | --- | --- |
-| `python -m federated_mcts` | `fmcts-run` | Run one search experiment. |
-| `fmcts-exp` | `python -m federated_mcts.experiments.sweep` | Historical Game24 sampling sweep. |
-
-Run one experiment from a source checkout:
-
-```bash
-PYTHONPATH=src .venv/bin/python -m federated_mcts \
-  --task game24 \
-  --task_start_index 0 --task_end_index 3 \
-  --model_config configs/model_config_vllm.json \
-  --solve_method tot \
-  --method_generate propose \
-  --method_evaluate vote \
-  --method_select greedy \
-  --n_generate_sample 2 \
-  --n_evaluate_sample 3 \
-  --n_select_sample 2 \
-  --temperature 0.9 \
-  --check_format
-```
-
-Useful safety/output options:
-
-- `--dry_run` resolves flags, task IDs, the model config, the manifest, and the
-  projection without creating output files, clients, or making API calls.
-- `--mock_client` uses the deterministic offline Game24 client; it still goes
-  through the normal solver constructor and search path.
-- `--resume` continues a run only when the journal's `run_fingerprint` matches;
-  without it, an existing output prefix is rejected, never overwritten.
-- Outputs are written under `logs/<task>/<solve_method>/<remote_model>/` as
-  `<prefix>_manifest.json`, `<prefix>.json`, `<prefix>_performance.json`,
-  `<prefix>_journal.json`, and `<prefix>_budget.jsonl`. The prefix ends in
-  `_ntasks{N}`. Equal-size task sets can share a prefix; use a different
-  `--inference_idx` for a different run rather than overwriting earlier evidence.
-
-New runs use schema-v2 manifests, including all resolved decision options and
-an explicit mock/real distinction. Historical v1 evidence remains readable and
-verifiable, but cannot authorize a v2 validation run: generate a new v2 pilot.
-Game24 audited/full validation currently requires baseline `tot` telemetry.
-DQN checkpoint identity follows file contents, not the filename. Execution rejects
-changes since preparation, and the loader verifies the exact bytes it deserializes.
-
-### Internal boundaries
-
-- [DecisionSpec](<src/federated_mcts/config.py>) is the immutable source for search
-  options and decision identity; model configuration is resolved once per run.
-- [Experiment runner](<src/federated_mcts/experiments/runner.py>) separates read-only
-  `prepare()` from `execute()`, which owns authorization, clients, usage and commits.
-- [FederatedSolver](<src/federated_mcts/federation/orchestrator.py>) accepts injected
-  clients. [finish_task](<src/federated_mcts/federation/outcome.py>) verifies the
-  outcome before publishing the DQN terminal transition.
-- [Observation protocols](<src/federated_mcts/core/observation.py>) keep search
-  primitives independent of concrete Game24 telemetry recorders. Evaluation caches
-  are isolated by task/input, client instance and evaluator identity.
-- [Usage scopes](<src/federated_mcts/models/usage.py>) isolate concurrent runs;
-  [RateCard](<src/federated_mcts/models/rates.py>) supplies shared Decimal pricing.
-- [TaskCommitter](<src/federated_mcts/evaluation/game24_persistence.py>) orders
-  durable outcome → keyed charge → settled outcome. Evidence verification uses a
-  separate read-only ledger parser, never a writable ledger constructor.
-
-Recovery settles a durable task outcome and its exact Decimal charge at most
-once. An interrupted API call with no metered outcome is deliberately **not**
-automatically replayed: its usage is unknown and needs manual reconciliation.
-Run artifacts have a single-writer contract. Call/token caps are checked at task
-boundaries, not inside a model request. Selected-test authorization stays
-one-shot; `--resume` does not reauthorize a consumed selected-test attempt.
-
-`fmcts-exp` preserves the historical sampling sweep. Its phase-2 non-`tot`
-Game24 configs over more than 20 tasks are rejected by the current runner
-safety gate; update the experiment design before reusing that phase.
-
-The pre-refactor layout is gone. In particular:
-
-| Removed | Replacement |
+| Further comparison | What the records show |
 | --- | --- |
-| root `run.py`, root `merged_run.py`, root `exp.py` | `python -m federated_mcts` / `fmcts-run` (search) and `fmcts-exp` (sweep). |
-| `scripts/run.py`, `scripts/merged_run.py`, `scripts/exp.py` | The same canonical module entry points; the run lifecycle lives in `federated_mcts.experiments.runner`, and sweep lives in `federated_mcts.experiments.sweep`. |
-| `scripts/game24/*.sh`, `scripts/text/*.sh`, `scripts/crosswords/*.sh`, `scripts/gsm8k/*.sh` recipes tied to the deleted scripts | The two recipes that remain were converted to `python -m federated_mcts`; incompatible ones were deleted with reasons in [`scripts/README.md`](scripts/README.md). |
+| [Complete answers vs. search](experiments/jointtot_202611/sampling/README.md) · archival, 148 other Game24 puzzles | Ten DeepSeek-V3 answers per puzzle, checked by an arithmetic verifier, solved **130/148**; the all-cloud tree solved **132/148**. The tree cost **8.34×** as much at historical rates (CNY 10.93 vs. 1.31). Budgets were not matched. |
+| [Branch selection](experiments/jointtot_202611/replay/README.md) · replay, 200 validation puzzles | Of 118 second-layer pools with a path still capable of reaching 24, the original selector kept such a path in **51**; dropping unchanged states and merging duplicates kept one in **57**. No new continuations were generated: these are not six extra solved puzzles. |
+| [Evaluator size](experiments/jointtot_202611/local_judge/README.md) · **new local inference**, 20 of those 200 puzzles | Given four choices per puzzle, Qwen2.5-7B and 32B picked a viable first choice **8/20 vs. 15/20** times. Reversing the same choices gave **12/20 vs. 12/20**. |
+| [GSM8K grading](experiments/jointtot_202611/gsm8k/README.md) · archival, 50 matched questions | The old grader favored the split (all-cloud **40/50**, split **42/50**); a fixed exact-number rule reversed the ranking (**42/50**, **40/50**). The split used **19.33% fewer tokens** across both models. |
 
-The runner keeps the same experimental parameters and environment handling as
-the retired scripts: model configuration, credentials, task range/split, solver
-knobs, and output location are still explicit inputs, and no recipe silently
-substitutes a model or algorithm.
+The Game24 sampling, replay and evaluator studies require nonnegative integer intermediate results and exact division. Their metrics and puzzle sets differ; do not pool them into a single win rate. The open question is what an extra cloud call buys **at the same budget**: another proposal, a complete answer, or a better ranking.
 
-## Testing
+## Quickstart
 
-```bash
+From the repository root, install with **Python 3.10+**. The default installation is sufficient for the offline demo and HTTP clients; it does not require PyTorch, Transformers, or a GPU.
+
+~~~bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
+python -m federated_mcts --help
+~~~
+
+Run **one Game24 puzzle** using a deterministic mock client. No API key, model download, or service is needed after installation. The [demo configuration](examples/mock-game24.json) uses loopback addresses; the model names are for configuration and accounting only.
+
+~~~bash
+python -m federated_mcts --task game24 \
+  --task_start_index 3 --task_end_index 4 \
+  --solve_method tot --method_generate propose --method_evaluate vote \
+  --method_select greedy --n_select_sample 2 \
+  --model_config examples/mock-game24.json --mock_client
+~~~
+
+The half-open range selects only puzzle 3. The runner writes its trace, performance summary, manifest, journal and budget ledger under `logs/game24/tot/deepseek-v4-flash/`. Add `--dry_run` to inspect the plan without creating outputs; choose a new `--inference_idx` for a fresh run, or use `--resume` with a matching fingerprint. The mock exercises the search code, **not** the accuracy, API charges, or end-to-end routing in the paper.
+
+## Reproduce the checks
+
+From a source checkout with the experiment artifacts, these commands check the rendered tables and re-score the saved local evaluator outputs. Neither command calls a model or downloads weights.
+
+~~~bash
+D=experiments/jointtot_202611
+python3 -B "$D/paper/render.py" --check
+python3 -B "$D/local_judge/verify.py" --check
+~~~
+
+For per-puzzle records, scoring rules, paired comparisons and instructions for rebuilding from raw archives, see the [experiment guide](experiments/jointtot_202611/README.md). Full archival reconstruction needs the files and, in some cases, Git objects identified there; the Python package alone is not the artifact bundle.
+
+## Running and developing the code
+
+- **Entry points.** `fmcts-run` is equivalent to `python -m federated_mcts`. `fmcts-exp` (or `python -m federated_mcts.experiments.sweep`) is a historical sweep, not an offline demo. Its non-`tot` phase over more than 20 Game24 puzzles is blocked by the current validation gate. The [script migration notes](scripts/README.md) cover the retired `run.py`, `merged_run.py` and `exp.py` entry points.
+- **Live runs.** Use your own endpoint configuration and credentials, not the demo file; [the environment template](.env.example) lists the variables. Check the [runner's client selection](src/federated_mcts/experiments/runner.py) and [solver routing](src/federated_mcts/federation/standard_solvers.py) before spending a budget: the current baseline runner explicitly supplies a remote proposer when present. The `speculative_solve` flag alone does not reproduce the historical split. Optional local ML backends use `python -m pip install -e ".[local]"`; this does not launch a model server.
+- **Outputs and recovery.** A [run manifest](src/federated_mcts/experiments/runner.py) records resolved options and whether clients were mocked. Keep one writer per prefix. Call/token caps are checked between tasks; an interrupted call with unknown usage requires reconciliation, not an automatic retry. Historical v1 manifests remain readable but cannot authorize full v2 Game24 validation: run a new baseline `tot` pilot. Resuming does not renew one-shot test authorization.
+- **Source layout.** [`src/federated_mcts/`](src/federated_mcts/) is the installed package. [`src/tot/`](src/tot/) is the historical implementation, kept for reference and excluded from the distribution. [`tests/`](tests/) covers the current runner, search and accounting.
+
+For the full test suite, install `.[local]` first (some tests import PyTorch). Run from the repository root with the live diagnostic disabled:
+
+~~~bash
 PYTHONPATH=src RUN_LIVE_DEEPSEEK_DIAGNOSTIC=0 \
-  .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
-```
+  python -m unittest discover -s tests -p 'test_*.py'
+~~~
 
-Tests are offline by default. The live DeepSeek diagnostic is opt-in through
-`RUN_LIVE_DEEPSEEK_DIAGNOSTIC=1` and is never required by the suite.
+## Acknowledgments and license
 
-## Small Talk
+JointToT builds on Yao et al., [*Tree of Thoughts: Deliberate Problem Solving with Large Language Models*](https://arxiv.org/abs/2305.10601) ([upstream code](https://github.com/princeton-nlp/tree-of-thought-llm)). The code is distributed under the [MIT License](LICENSE); the upstream copyright notice is retained.

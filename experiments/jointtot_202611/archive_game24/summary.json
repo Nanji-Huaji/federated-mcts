@@ -1,0 +1,493 @@
+{
+  "schema": "archive_game24.paired.v1",
+  "evidence_type": "离线复判既有归档；无新模型生成",
+  "inputs": {
+    "dataset": {
+      "path": "src/tot/data/24/24.csv",
+      "sha256": "b9f12b3e36d987a3c714c4cef17d89a137d7c59da26532fcfb93b4821d8111b5",
+      "bytes": 48235
+    },
+    "solver_context": {
+      "path": "src/tot/methods/bfs.py",
+      "sha256": "0992ed817fa15f611378ab7e10bd85b012f04efe8c1576c1285bccf4df8569ed",
+      "bytes": 32044
+    },
+    "accounting_context": {
+      "path": "src/tot/models.py",
+      "sha256": "7829d6992c2ef4da90c6d212cd072565488d005966d84ea069f1d0c13afec49d",
+      "bytes": 8690
+    },
+    "cloud_raw": {
+      "path": "logs/game24/tot/deepseek-v3/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start900_end930_smg_False_sme_False_check_True_rule_False_warm_False_last_False_idx_0.json",
+      "sha256": "748f4bb483905ac54bab2d881eae686c8b006a225bc4742d4e3fa5903f060260",
+      "bytes": 373840
+    },
+    "cloud_performance": {
+      "path": "logs/game24/tot/deepseek-v3/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start900_end930_smg_False_sme_False_check_True_rule_False_warm_False_last_False_idx_0_performance.json",
+      "sha256": "c184ea7d893031b2f765620c34d6436f5a670b72f5ca9c9e65605264799290e7",
+      "bytes": 309
+    },
+    "edge_gen_raw": {
+      "path": "logs/logs_archived/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start900_end930_smg_False_sme_False_check_True_rule_False_warm_False_last_False_idx_0.json",
+      "sha256": "45d5feb19940b629522a3f1b351a8fcd76769a7e171fd4f29240d5b9b03da7a7",
+      "bytes": 390447
+    },
+    "edge_gen_performance": {
+      "path": "logs/logs_archived/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start900_end930_smg_False_sme_False_check_True_rule_False_warm_False_last_False_idx_0_performance.json",
+      "sha256": "d7095b1410f97865c1f1af064d9a60da84ac91bcb2be84dc84efb2781bf6eed6",
+      "bytes": 504
+    },
+    "warm_raw": {
+      "path": "logs/logs_archived/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start900_end930_smg_False_sme_False_check_True_rule_False_warm_True_last_False_idx_0.json",
+      "sha256": "ef0e9e0dad15be81f3f6ba194e58b7b7cb60f26341ac8c54a709a089afb9d1f5",
+      "bytes": 383489
+    },
+    "warm_performance": {
+      "path": "logs/logs_archived/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start900_end930_smg_False_sme_False_check_True_rule_False_warm_True_last_False_idx_0_performance.json",
+      "sha256": "b8dd6257e2b3cce6591361ad0fcc0e98da8bb1cad6960fc61600dc672792d9d8",
+      "bytes": 506
+    }
+  },
+  "dataset": {
+    "csv_rows": 1362,
+    "idx_zero_based_inclusive": [
+      900,
+      929
+    ],
+    "unique_tasks": 30,
+    "cohort_sha256": "ea438d55c8673cc6452a65c82254ce1414544950ae9006106b7db081397a24e9",
+    "cohort_encoding": "UTF-8, ascending idx; idx<TAB>Rank<TAB>Puzzles<LF>, no header"
+  },
+  "archived_configuration": {
+    "filename_flags": {
+      "temperature": 0.7,
+      "method_generate": "propose",
+      "n_generate_sample": 1,
+      "method_evaluate": "value",
+      "n_evaluate_sample": 1,
+      "method_select": "greedy",
+      "n_select_sample": 10,
+      "check": true,
+      "rule": false,
+      "last": false
+    },
+    "observed_depth": 3,
+    "observed_final_width": 10,
+    "note": "文件名标称配置；并非逐题实际生成数或相等的推理预算。"
+  },
+  "protocol": {
+    "primary": "按题；末层保留 ys 中任一完整合法轨迹。每题十条，按原序；零成功仍计入分母。",
+    "verifier": "三步；完整匹配运算行，从数据四数起按副本取操作数；精确有理数验等式和每步 left 多重集，只接受最终单例 24。不修复，不解题。归档全是非负整数写法。",
+    "provenance": "组标签取自上轮归档对应关系、性能文件模型键及文件名；与旧 solve/speculative_solve 分工一致，不是逐请求路由证明。",
+    "conditioning": "同题固定历史输出，不是同预算重跑、随机抽题或盲测。首条、前 k 条、末层候选池、同分重排均不改历史账单或前层搜索。",
+    "paired_interval": "同题 A−B 百分点；从 30 个配对任务等概率有放回抽 30 个，精确枚举差值 +1/−1/0 的经验多项分布，取左连续逆 CDF 的 2.5% 和 97.5% 分位数（无 Monte Carlo）。描述性，不是总体保证。",
+    "marginal_interval": "百分数，95% Wilson score，z=1.959963984540054；仅作这批连续题的描述。",
+    "tie_diagnostic": "固定原末层 new_ys 和 values；只选择一个最高分槽位。最差/最好同分次序按题给界，期望按并列槽位均匀选一；不是新策略实测。",
+    "usage": "每模型历史累计计数与末条及 performance 核对；CSV 为相邻累计差（首题以 0 为记账基线）。无边模型键记 0 个已记录 tokens/calls，原 cost 留空。",
+    "cost": "old_cost_field 是归档 cost 十进制文本，非实付。旧代码单位元，每百万 prompt/completion 取 1/2 与两模型字段吻合；只按云字段对全云算差，不相加。"
+  },
+  "arms": {
+    "cloud": {
+      "historical_configuration_label": "DeepSeek-V3 generation and value evaluation",
+      "n_tasks": 30,
+      "strict_any_solved": 26,
+      "strict_any_pct": 86.666667,
+      "strict_any_wilson95_pct": [
+        70.318673,
+        94.690345
+      ],
+      "strict_first_solved": 14,
+      "strict_valid_selected_slots": 84,
+      "strict_selected_slot_verdict_counts": {
+        "not_24": 207,
+        "step_count": 9,
+        "valid": 84
+      },
+      "selected_slots": 300,
+      "actual_integer_line_profile": {
+        "final_pool_lines": 1425,
+        "selected_lines": 891,
+        "selected_with_terminal_lf": 300
+      },
+      "legacy": {
+        "any_solved": 26,
+        "first_solved": 14,
+        "positive_slots": 84,
+        "raw_acc_field": "0.8666666666666667",
+        "raw_avg_sum_field": "2.8"
+      },
+      "strict_vs_legacy": {
+        "discordant_slots": 0,
+        "discordant_any_tasks": 0,
+        "discordant_first_tasks": 0
+      },
+      "sensitivity": {
+        "solved_in_first_k_retained": {
+          "1": 14,
+          "3": 23,
+          "5": 25,
+          "10": 26
+        },
+        "valid_final_pool_slots": 103,
+        "final_pool_slots": 480,
+        "final_pool_covered_tasks": 26,
+        "covered_in_pool_not_retained_idx": [],
+        "fixed_pool_max_value_top1": {
+          "multiple_max_slots_tasks": 23,
+          "min_solved_over_tie_orders": 0,
+          "max_solved_over_tie_orders": 15,
+          "expected_solved_uniform_over_max_slots": 3.470281
+        }
+      },
+      "historical_usage": {
+        "cloud": {
+          "model": "deepseek-v3",
+          "counter_present": true,
+          "prompt_tokens": 1822453,
+          "completion_tokens": 156874,
+          "total_tokens": 1979327,
+          "total_calls": 3447,
+          "old_cost_field": "2.1362010000000002"
+        },
+        "edge": {
+          "model": "qwen2.5-32b-instruct",
+          "counter_present": false,
+          "prompt_tokens": 0,
+          "completion_tokens": 0,
+          "total_tokens": 0,
+          "total_calls": 0,
+          "old_cost_field": null
+        }
+      }
+    },
+    "edge_gen": {
+      "historical_configuration_label": "Qwen2.5-32B-Instruct generation, DeepSeek-V3 value evaluation",
+      "n_tasks": 30,
+      "strict_any_solved": 23,
+      "strict_any_pct": 76.666667,
+      "strict_any_wilson95_pct": [
+        59.071674,
+        88.207612
+      ],
+      "strict_first_solved": 13,
+      "strict_valid_selected_slots": 73,
+      "strict_selected_slot_verdict_counts": {
+        "not_24": 227,
+        "valid": 73
+      },
+      "selected_slots": 300,
+      "actual_integer_line_profile": {
+        "final_pool_lines": 1539,
+        "selected_lines": 900,
+        "selected_with_terminal_lf": 300
+      },
+      "legacy": {
+        "any_solved": 23,
+        "first_solved": 13,
+        "positive_slots": 73,
+        "raw_acc_field": "0.7666666666666667",
+        "raw_avg_sum_field": "2.433333333333333"
+      },
+      "strict_vs_legacy": {
+        "discordant_slots": 0,
+        "discordant_any_tasks": 0,
+        "discordant_first_tasks": 0
+      },
+      "sensitivity": {
+        "solved_in_first_k_retained": {
+          "1": 13,
+          "3": 20,
+          "5": 23,
+          "10": 23
+        },
+        "valid_final_pool_slots": 77,
+        "final_pool_slots": 513,
+        "final_pool_covered_tasks": 23,
+        "covered_in_pool_not_retained_idx": [],
+        "fixed_pool_max_value_top1": {
+          "multiple_max_slots_tasks": 25,
+          "min_solved_over_tie_orders": 0,
+          "max_solved_over_tie_orders": 14,
+          "expected_solved_uniform_over_max_slots": 3.281817
+        }
+      },
+      "historical_usage": {
+        "cloud": {
+          "model": "deepseek-v3",
+          "counter_present": true,
+          "prompt_tokens": 1248454,
+          "completion_tokens": 38888,
+          "total_tokens": 1287342,
+          "total_calls": 1467,
+          "old_cost_field": "1.32623"
+        },
+        "edge": {
+          "model": "qwen2.5-32b-instruct",
+          "counter_present": true,
+          "prompt_tokens": 728187,
+          "completion_tokens": 156768,
+          "total_tokens": 884955,
+          "total_calls": 2108,
+          "old_cost_field": "1.041723"
+        }
+      }
+    },
+    "warm": {
+      "historical_configuration_label": "As edge_gen, except DeepSeek-V3 generates the root expansion",
+      "n_tasks": 30,
+      "strict_any_solved": 25,
+      "strict_any_pct": 83.333333,
+      "strict_any_wilson95_pct": [
+        66.435649,
+        92.663458
+      ],
+      "strict_first_solved": 13,
+      "strict_valid_selected_slots": 83,
+      "strict_selected_slot_verdict_counts": {
+        "not_24": 217,
+        "valid": 83
+      },
+      "selected_slots": 300,
+      "actual_integer_line_profile": {
+        "final_pool_lines": 1446,
+        "selected_lines": 900,
+        "selected_with_terminal_lf": 300
+      },
+      "legacy": {
+        "any_solved": 25,
+        "first_solved": 13,
+        "positive_slots": 83,
+        "raw_acc_field": "0.8333333333333334",
+        "raw_avg_sum_field": "2.7666666666666666"
+      },
+      "strict_vs_legacy": {
+        "discordant_slots": 0,
+        "discordant_any_tasks": 0,
+        "discordant_first_tasks": 0
+      },
+      "sensitivity": {
+        "solved_in_first_k_retained": {
+          "1": 13,
+          "3": 24,
+          "5": 25,
+          "10": 25
+        },
+        "valid_final_pool_slots": 86,
+        "final_pool_slots": 482,
+        "final_pool_covered_tasks": 25,
+        "covered_in_pool_not_retained_idx": [],
+        "fixed_pool_max_value_top1": {
+          "multiple_max_slots_tasks": 27,
+          "min_solved_over_tie_orders": 0,
+          "max_solved_over_tie_orders": 15,
+          "expected_solved_uniform_over_max_slots": 3.187091
+        }
+      },
+      "historical_usage": {
+        "cloud": {
+          "model": "deepseek-v3",
+          "counter_present": true,
+          "prompt_tokens": 1209735,
+          "completion_tokens": 41879,
+          "total_tokens": 1251614,
+          "total_calls": 1444,
+          "old_cost_field": "1.293493"
+        },
+        "edge": {
+          "model": "qwen2.5-32b-instruct",
+          "counter_present": true,
+          "prompt_tokens": 725793,
+          "completion_tokens": 150082,
+          "total_tokens": 875875,
+          "total_calls": 2104,
+          "old_cost_field": "1.025957"
+        }
+      }
+    }
+  },
+  "paired": {
+    "strict_any": [
+      {
+        "a": "edge_gen",
+        "b": "cloud",
+        "n": 30,
+        "both": 22,
+        "a_only": 1,
+        "b_only": 4,
+        "neither": 3,
+        "a_only_idx": [
+          901
+        ],
+        "b_only_idx": [
+          920,
+          924,
+          928,
+          929
+        ],
+        "difference_a_minus_b_pp": -10.0,
+        "paired_bootstrap95_pp": [
+          -23.333333,
+          3.333333
+        ]
+      },
+      {
+        "a": "warm",
+        "b": "cloud",
+        "n": 30,
+        "both": 24,
+        "a_only": 1,
+        "b_only": 2,
+        "neither": 3,
+        "a_only_idx": [
+          917
+        ],
+        "b_only_idx": [
+          904,
+          920
+        ],
+        "difference_a_minus_b_pp": -3.333333,
+        "paired_bootstrap95_pp": [
+          -13.333333,
+          6.666667
+        ]
+      },
+      {
+        "a": "warm",
+        "b": "edge_gen",
+        "n": 30,
+        "both": 21,
+        "a_only": 4,
+        "b_only": 2,
+        "neither": 3,
+        "a_only_idx": [
+          917,
+          924,
+          928,
+          929
+        ],
+        "b_only_idx": [
+          901,
+          904
+        ],
+        "difference_a_minus_b_pp": 6.666667,
+        "paired_bootstrap95_pp": [
+          -10.0,
+          23.333333
+        ]
+      }
+    ],
+    "strict_first": [
+      {
+        "a": "edge_gen",
+        "b": "cloud",
+        "n": 30,
+        "both": 6,
+        "a_only": 7,
+        "b_only": 8,
+        "neither": 9,
+        "a_only_idx": [
+          901,
+          907,
+          908,
+          910,
+          913,
+          919,
+          926
+        ],
+        "b_only_idx": [
+          900,
+          902,
+          904,
+          916,
+          920,
+          924,
+          925,
+          929
+        ],
+        "difference_a_minus_b_pp": -3.333333,
+        "paired_bootstrap95_pp": [
+          -30.0,
+          23.333333
+        ]
+      },
+      {
+        "a": "warm",
+        "b": "cloud",
+        "n": 30,
+        "both": 7,
+        "a_only": 6,
+        "b_only": 7,
+        "neither": 10,
+        "a_only_idx": [
+          907,
+          908,
+          917,
+          919,
+          921,
+          927
+        ],
+        "b_only_idx": [
+          900,
+          902,
+          904,
+          905,
+          916,
+          920,
+          925
+        ],
+        "difference_a_minus_b_pp": -3.333333,
+        "paired_bootstrap95_pp": [
+          -26.666667,
+          20.0
+        ]
+      },
+      {
+        "a": "warm",
+        "b": "edge_gen",
+        "n": 30,
+        "both": 8,
+        "a_only": 5,
+        "b_only": 5,
+        "neither": 12,
+        "a_only_idx": [
+          917,
+          921,
+          924,
+          927,
+          929
+        ],
+        "b_only_idx": [
+          901,
+          905,
+          910,
+          913,
+          926
+        ],
+        "difference_a_minus_b_pp": 0.0,
+        "paired_bootstrap95_pp": [
+          -20.0,
+          20.0
+        ]
+      }
+    ]
+  },
+  "cloud_only_savings_vs_cloud": {
+    "edge_gen": {
+      "cloud_cost_field_reduction_6dp": "0.809971",
+      "cloud_cost_field_reduction_pct": 37.916423,
+      "cloud_total_tokens_reduction": 691985,
+      "cloud_total_calls_reduction": 1980
+    },
+    "warm": {
+      "cloud_cost_field_reduction_6dp": "0.842708",
+      "cloud_cost_field_reduction_pct": 39.44891,
+      "cloud_total_tokens_reduction": 727713,
+      "cloud_total_calls_reduction": 2003
+    }
+  },
+  "exclusions": [
+    "稿中全云 90%/2.17 与此归档不符，未归为同一运行。",
+    "无逐请求/角色账单、独立种子重复、可比 GPU 时长/能耗/边际价格；不估总成本、加速、非劣效或标准分数搜索表现。",
+    "只复核留档（可能已被历史格式检查处理）的文本，不还原原始模型响应或未展开分支。"
+  ]
+}

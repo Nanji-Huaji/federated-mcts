@@ -1,0 +1,89 @@
+{
+  "source": "logs/logs_archived/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start900_end930_smg_False_sme_False_check_True_rule_False_warm_True_last_False_idx_0.json",
+  "source_sha256": "ef0e9e0dad15be81f3f6ba194e58b7b7cb60f26341ac8c54a709a089afb9d1f5",
+  "arm": "warm",
+  "task_id": 900,
+  "initial": [
+    4,
+    5,
+    6,
+    10
+  ],
+  "beam_cap": 10,
+  "stages": [
+    {
+      "operands": [
+        4,
+        "*",
+        5
+      ],
+      "result": 20,
+      "state": [
+        6,
+        10,
+        20
+      ],
+      "layer": 1,
+      "pool": 8,
+      "kept": 8,
+      "pool_index": 7,
+      "stable_rank": 2,
+      "value": 20.0
+    },
+    {
+      "operands": [
+        10,
+        "-",
+        6
+      ],
+      "result": 4,
+      "state": [
+        4,
+        20
+      ],
+      "layer": 2,
+      "pool": 45,
+      "kept": 10,
+      "pool_index": 6,
+      "stable_rank": 2,
+      "value": 20.0
+    },
+    {
+      "operands": [
+        4,
+        "+",
+        20
+      ],
+      "result": 24,
+      "state": [
+        24
+      ],
+      "layer": 3,
+      "pool": 19,
+      "kept": 10,
+      "pool_index": 4,
+      "stable_rank": 4,
+      "value": 0.001
+    }
+  ],
+  "pruned_sibling": {
+    "operands": [
+      6,
+      "+",
+      10
+    ],
+    "result": 16,
+    "state": [
+      16,
+      20
+    ],
+    "parent_layer": 1,
+    "candidate_layer": 2,
+    "pool_index": 7,
+    "stable_rank": 11,
+    "value": 0.001
+  },
+  "all_final_values_tied": true,
+  "verified_expression": "4 × 5 + (10 − 6) = 24",
+  "scope": "Archival selected trace and stable ranks; entire layer counts; terminal arithmetic verification is retrospective."
+}
