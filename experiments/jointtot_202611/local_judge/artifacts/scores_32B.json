@@ -1,0 +1,573 @@
+{
+  "model": "Qwen/Qwen2.5-32B-Instruct",
+  "snapshot": "5ede1c97bbab6ce5cda5812749b4c0bdf79b18dd",
+  "config_sha256": "9c6772f138ef9e5b3d1c18f2c87e451bbc01f5f1a4eabb36f9bf4f53829b903e",
+  "shards": {
+    "model-00001-of-00017.safetensors": {
+      "blob": "fa006a0382517a4e9a8781d8e7d3405cd6bdd1b9100fb344d73f925b7da9341c",
+      "bytes": 3916539832
+    },
+    "model-00002-of-00017.safetensors": {
+      "blob": "0d7f28a4ba7135c2c8365016170cfa25723f65ec41e32ec9a3c81746e4395615",
+      "bytes": 3900847496
+    },
+    "model-00003-of-00017.safetensors": {
+      "blob": "8f4b7b811a7ecf117c179ac9413b7a746f2fc0707a41ae4b2efd0282e73bed85",
+      "bytes": 3900847480
+    },
+    "model-00004-of-00017.safetensors": {
+      "blob": "de8ab9cb81e6798031d2cf9ef6d15a0034b77fceeba3d4e011647943c8b99afb",
+      "bytes": 3900847544
+    },
+    "model-00005-of-00017.safetensors": {
+      "blob": "fa86494f0074cc36c610aa54e7bde03edefc57a9be7636216277bd5ed8b8bfda",
+      "bytes": 3900847544
+    },
+    "model-00006-of-00017.safetensors": {
+      "blob": "c8fa152bd8a23bab2c0cfca43ff9f586bccd82b1cb67f2f84231f31d0f3cab47",
+      "bytes": 3900847544
+    },
+    "model-00007-of-00017.safetensors": {
+      "blob": "5e33e16319d18d1e180187d9f858deddbbaf06d950abc88941bf027d1439c7bc",
+      "bytes": 3900847544
+    },
+    "model-00008-of-00017.safetensors": {
+      "blob": "8561b86737884397772bb990b38c0efe896f66ed27815ca207ddc8ec7965ffe4",
+      "bytes": 3900847544
+    },
+    "model-00009-of-00017.safetensors": {
+      "blob": "47f562bf77d986b53c5390b01a30a77576c3eed69191b484cf88b53bb64bce19",
+      "bytes": 3900847544
+    },
+    "model-00010-of-00017.safetensors": {
+      "blob": "359450e2c9e261751b5803fcdd1d0a040029a6119a271dd8592d7bb37fa722b5",
+      "bytes": 3900847544
+    },
+    "model-00011-of-00017.safetensors": {
+      "blob": "836f0570f5694ce1d55f505064190e2688926dad4f033384ae519d96faaad670",
+      "bytes": 3900847544
+    },
+    "model-00012-of-00017.safetensors": {
+      "blob": "5307431e385a177375a5aa887eb1c546f3413dd2e2269c291672f11f752842b4",
+      "bytes": 3900847544
+    },
+    "model-00013-of-00017.safetensors": {
+      "blob": "9b2657db02572dd4370186b35c0e0fa70218d7e2ec1190e4dc4a755c5cbd430e",
+      "bytes": 3900847544
+    },
+    "model-00014-of-00017.safetensors": {
+      "blob": "b5f1f8af3b6bbf734790985590752fb815dd69566cf05ee578d70af74ace1d4c",
+      "bytes": 3900847544
+    },
+    "model-00015-of-00017.safetensors": {
+      "blob": "8cdfcbf8913e10056c981db2db817f92c8601998deb9eabcae14fade98d76c14",
+      "bytes": 3900847544
+    },
+    "model-00016-of-00017.safetensors": {
+      "blob": "977b3d2ca7f97dc3b518ed5087ddc43ccf7afb371190828f2334d7e4c81224ee",
+      "bytes": 3900847544
+    },
+    "model-00017-of-00017.safetensors": {
+      "blob": "2853695483f9c61a8bd8b109025b3c591214a0362992fa844537f09acc81bd03",
+      "bytes": 3098588976
+    }
+  },
+  "input_sha256": "54a574ef35cfe3f42dec8f8719ac1265c548b5d31063f30a1f83863519fa51be",
+  "probe_sha256": "7ff1e40e23b1454c64ce0da86cd282b54686a41d1eb7aab8be67e361a3f89fad",
+  "torch": "2.7.0+cu126",
+  "transformers": "4.53.2",
+  "device": "cpu",
+  "dtype": "bfloat16",
+  "letter_token_ids": [
+    32,
+    33,
+    34,
+    35
+  ],
+  "threads": 12,
+  "batch": 4,
+  "load_seconds": 6.785374261438847,
+  "forward_seconds": 1299.6917408593,
+  "records": [
+    {
+      "task_id": 3,
+      "reverse": false,
+      "prompt_sha256": "17ccaa4ad1e62106d050f18dfb9a0c49724b17829d4665ebfd25f7228874ddf4",
+      "input_tokens": 106,
+      "letter_logits": [
+        34.75,
+        43.75,
+        59.25,
+        44.25
+      ]
+    },
+    {
+      "task_id": 3,
+      "reverse": true,
+      "prompt_sha256": "6b6e94f8999b13c170dbdd22cbc3b426a7000a8189f73f7f7e60bf77f6ce23d7",
+      "input_tokens": 106,
+      "letter_logits": [
+        39.5,
+        58.5,
+        41.5,
+        38.25
+      ]
+    },
+    {
+      "task_id": 9,
+      "reverse": false,
+      "prompt_sha256": "891a59db5ea1d9f2f05408f9c99c9a3ed937973bc910a532ce0b606553a498f1",
+      "input_tokens": 110,
+      "letter_logits": [
+        36.25,
+        59.0,
+        33.25,
+        44.25
+      ]
+    },
+    {
+      "task_id": 9,
+      "reverse": true,
+      "prompt_sha256": "84a2795c2b60fd4da504e48e9dff1c12de2d149b3c0ffdde45f566787f99caec",
+      "input_tokens": 110,
+      "letter_logits": [
+        40.75,
+        36.25,
+        58.75,
+        35.75
+      ]
+    },
+    {
+      "task_id": 16,
+      "reverse": false,
+      "prompt_sha256": "4e29e2698d4ddc572316348897a80c2e8466cfc9ef94b239f117d1f4a6d828bc",
+      "input_tokens": 110,
+      "letter_logits": [
+        41.25,
+        40.25,
+        45.5,
+        60.25
+      ]
+    },
+    {
+      "task_id": 16,
+      "reverse": true,
+      "prompt_sha256": "6065d84bc74b54bb132f3d5a79c0972a238f52455fe0a9eb994cd05f77c26ff8",
+      "input_tokens": 110,
+      "letter_logits": [
+        59.25,
+        39.75,
+        41.0,
+        41.0
+      ]
+    },
+    {
+      "task_id": 19,
+      "reverse": false,
+      "prompt_sha256": "4a424b57e08b27e5cb66a80c03da1b2fd953251bc79e0dcc9c251ef1dd16f362",
+      "input_tokens": 107,
+      "letter_logits": [
+        40.5,
+        56.5,
+        48.0,
+        47.5
+      ]
+    },
+    {
+      "task_id": 19,
+      "reverse": true,
+      "prompt_sha256": "44319bc6a5f947b57f5ab5f4c68848ff3da1892adbc04f1a5835dcf81837e73f",
+      "input_tokens": 107,
+      "letter_logits": [
+        44.25,
+        50.25,
+        49.75,
+        45.25
+      ]
+    },
+    {
+      "task_id": 24,
+      "reverse": false,
+      "prompt_sha256": "491d3951b0c1d4301084a05a1bfd227c3bf7b5e63c2cde5255b95b7948bf2817",
+      "input_tokens": 111,
+      "letter_logits": [
+        34.0,
+        44.75,
+        56.5,
+        49.25
+      ]
+    },
+    {
+      "task_id": 24,
+      "reverse": true,
+      "prompt_sha256": "c6742c2b82950b7b84d7ed0bddd91c1c1680b59a44c656cc0dea40027d51d0ad",
+      "input_tokens": 111,
+      "letter_logits": [
+        40.75,
+        58.0,
+        44.0,
+        42.75
+      ]
+    },
+    {
+      "task_id": 25,
+      "reverse": false,
+      "prompt_sha256": "d86db8acf9983370c6bd51c304de9d61ed8cd0fb47e6ba6b11113f2486262a30",
+      "input_tokens": 110,
+      "letter_logits": [
+        48.25,
+        49.75,
+        46.5,
+        52.5
+      ]
+    },
+    {
+      "task_id": 25,
+      "reverse": true,
+      "prompt_sha256": "8ef58921b5fa386306ed9d73fba13ebb33794216d6124be238cf37734a3bfdbe",
+      "input_tokens": 110,
+      "letter_logits": [
+        52.0,
+        44.5,
+        49.5,
+        42.0
+      ]
+    },
+    {
+      "task_id": 28,
+      "reverse": false,
+      "prompt_sha256": "d00680ff0c3fd36f99e6241c1779de2fa161cf4bb242c1b66f71af937b669315",
+      "input_tokens": 113,
+      "letter_logits": [
+        47.75,
+        46.5,
+        48.0,
+        42.5
+      ]
+    },
+    {
+      "task_id": 28,
+      "reverse": true,
+      "prompt_sha256": "d3416767fae907466d8f059597b7c5bf6791e27b3ab71f63c9ce067de067a218",
+      "input_tokens": 113,
+      "letter_logits": [
+        44.0,
+        45.0,
+        47.25,
+        40.5
+      ]
+    },
+    {
+      "task_id": 36,
+      "reverse": false,
+      "prompt_sha256": "8c161803ae4d3b45d5c397967ae79566207569f2191e1ac14e1484203639be20",
+      "input_tokens": 117,
+      "letter_logits": [
+        54.25,
+        49.5,
+        39.25,
+        43.25
+      ]
+    },
+    {
+      "task_id": 36,
+      "reverse": true,
+      "prompt_sha256": "ad85c147c85bf78b988210974aae9cfc64c9739f63de956c7269f4bfca7ffaf0",
+      "input_tokens": 117,
+      "letter_logits": [
+        45.5,
+        40.75,
+        46.25,
+        39.5
+      ]
+    },
+    {
+      "task_id": 40,
+      "reverse": false,
+      "prompt_sha256": "d2dcbe7d15378d2a5b255edbbf07f1b5fe8212fcd8ac3e3f8587b1927a4e24d5",
+      "input_tokens": 111,
+      "letter_logits": [
+        59.25,
+        45.5,
+        44.0,
+        34.0
+      ]
+    },
+    {
+      "task_id": 40,
+      "reverse": true,
+      "prompt_sha256": "657adee006e39ca4a4281f2d795579ce361aaf70ffd0c3d867d03ba8d1fb99da",
+      "input_tokens": 111,
+      "letter_logits": [
+        32.25,
+        45.75,
+        57.0,
+        50.0
+      ]
+    },
+    {
+      "task_id": 42,
+      "reverse": false,
+      "prompt_sha256": "d25ea03854745c17a112a7f543d9b4576313c6320266d1d5cba861369e79180c",
+      "input_tokens": 111,
+      "letter_logits": [
+        46.5,
+        53.25,
+        51.75,
+        39.0
+      ]
+    },
+    {
+      "task_id": 42,
+      "reverse": true,
+      "prompt_sha256": "a6d02bb98ebbf2e2814008cf81df116a771c3212df62f581afc46dac11f5146b",
+      "input_tokens": 111,
+      "letter_logits": [
+        41.25,
+        49.5,
+        57.0,
+        37.0
+      ]
+    },
+    {
+      "task_id": 45,
+      "reverse": false,
+      "prompt_sha256": "845adfb60fb7131ef4e786bd67ec20375db53b9ed73ccdcbe138ce7a5976a236",
+      "input_tokens": 108,
+      "letter_logits": [
+        53.0,
+        48.25,
+        44.75,
+        55.5
+      ]
+    },
+    {
+      "task_id": 45,
+      "reverse": true,
+      "prompt_sha256": "ec4722219cddc28c082e3d068db2e7b4d9ecf4dab42cc1797e4b95081e1db68a",
+      "input_tokens": 108,
+      "letter_logits": [
+        50.25,
+        41.25,
+        42.0,
+        56.75
+      ]
+    },
+    {
+      "task_id": 71,
+      "reverse": false,
+      "prompt_sha256": "33f287837cbafb3f9b377a9aa368816ccab2042b3e2f7e106fdfbe7f4fa23700",
+      "input_tokens": 107,
+      "letter_logits": [
+        48.5,
+        54.75,
+        50.5,
+        41.25
+      ]
+    },
+    {
+      "task_id": 71,
+      "reverse": true,
+      "prompt_sha256": "c6810ce48016027cf82490ce36532138ef5f9441c72cf0e5094365a20be87493",
+      "input_tokens": 107,
+      "letter_logits": [
+        33.5,
+        48.25,
+        59.0,
+        44.0
+      ]
+    },
+    {
+      "task_id": 77,
+      "reverse": false,
+      "prompt_sha256": "5ffca23bd4fe0062024f6a09acd90e0d256a5d43738e719c94bee2a163b092d6",
+      "input_tokens": 108,
+      "letter_logits": [
+        51.25,
+        55.5,
+        46.75,
+        40.5
+      ]
+    },
+    {
+      "task_id": 77,
+      "reverse": true,
+      "prompt_sha256": "322743dcdea60c390e664726ade60f6878646a68e5d1f113ea86a324e396522c",
+      "input_tokens": 108,
+      "letter_logits": [
+        41.25,
+        50.25,
+        50.5,
+        47.25
+      ]
+    },
+    {
+      "task_id": 81,
+      "reverse": false,
+      "prompt_sha256": "9b52fecd6e7d84eb0422044088a777c226c6302057aa6641356c7447c9fbf754",
+      "input_tokens": 112,
+      "letter_logits": [
+        37.0,
+        54.0,
+        54.0,
+        46.25
+      ]
+    },
+    {
+      "task_id": 81,
+      "reverse": true,
+      "prompt_sha256": "8a524104d362b1c2abc46986068819f46deb41b4f93a53ac846a699ff6054e89",
+      "input_tokens": 112,
+      "letter_logits": [
+        44.5,
+        47.75,
+        54.0,
+        35.5
+      ]
+    },
+    {
+      "task_id": 102,
+      "reverse": false,
+      "prompt_sha256": "5204444e8249505e2d1c5ba4289387678d68b5ffb30cf839e013733aa151c676",
+      "input_tokens": 111,
+      "letter_logits": [
+        43.0,
+        55.0,
+        44.25,
+        53.25
+      ]
+    },
+    {
+      "task_id": 102,
+      "reverse": true,
+      "prompt_sha256": "d56e1e6c3dcb8e2c2d41126c53be89fda4c25feea88a64a5657f5bd2e65c1492",
+      "input_tokens": 111,
+      "letter_logits": [
+        52.75,
+        43.75,
+        49.75,
+        39.75
+      ]
+    },
+    {
+      "task_id": 104,
+      "reverse": false,
+      "prompt_sha256": "3d3dc3cda8b2535642475bbf7089b0193ff8a47929e27847100cb4f6b82c3aa6",
+      "input_tokens": 110,
+      "letter_logits": [
+        53.25,
+        44.0,
+        53.5,
+        41.0
+      ]
+    },
+    {
+      "task_id": 104,
+      "reverse": true,
+      "prompt_sha256": "a18bf5df02121d2641e950eb55c81248cb49ec9ff29bfd0641dc417d7468fc73",
+      "input_tokens": 110,
+      "letter_logits": [
+        40.75,
+        46.25,
+        43.25,
+        59.0
+      ]
+    },
+    {
+      "task_id": 105,
+      "reverse": false,
+      "prompt_sha256": "77760b25819385ff029d33353df4c9e79035dc226d565b7d4b6d0e4fcf890620",
+      "input_tokens": 108,
+      "letter_logits": [
+        48.75,
+        48.5,
+        43.5,
+        55.25
+      ]
+    },
+    {
+      "task_id": 105,
+      "reverse": true,
+      "prompt_sha256": "c536e5b7938aa1e5d4326616817fe9f5fa1c28e4c4cbd68a24f28ed58074f562",
+      "input_tokens": 108,
+      "letter_logits": [
+        58.5,
+        40.75,
+        44.5,
+        40.5
+      ]
+    },
+    {
+      "task_id": 116,
+      "reverse": false,
+      "prompt_sha256": "db70199607f87664c0380fbaf82faea4817cfc233777f17520a5d91ce5899b2e",
+      "input_tokens": 109,
+      "letter_logits": [
+        43.75,
+        55.75,
+        46.25,
+        42.75
+      ]
+    },
+    {
+      "task_id": 116,
+      "reverse": true,
+      "prompt_sha256": "ad19e61e063842acf72610d82a8b78073319db992b74e812a1f38c2d0bc0f566",
+      "input_tokens": 109,
+      "letter_logits": [
+        49.5,
+        46.0,
+        51.75,
+        42.5
+      ]
+    },
+    {
+      "task_id": 117,
+      "reverse": false,
+      "prompt_sha256": "a06be780204d0162dd17fc6532c52abc67d857f3c371a597cccf3114c8fa1a84",
+      "input_tokens": 116,
+      "letter_logits": [
+        47.5,
+        44.75,
+        49.5,
+        39.0
+      ]
+    },
+    {
+      "task_id": 117,
+      "reverse": true,
+      "prompt_sha256": "2e296bd0ee9d3c2314782d9c4f26719cd7df1d33bf2375ec08df8b8abb02f1a7",
+      "input_tokens": 116,
+      "letter_logits": [
+        42.75,
+        54.75,
+        43.0,
+        47.0
+      ]
+    },
+    {
+      "task_id": 119,
+      "reverse": false,
+      "prompt_sha256": "ea0361559a84e1dd22a91241ad35fa89c3c9414ff1f2457dcaf93cb049dd83ce",
+      "input_tokens": 108,
+      "letter_logits": [
+        56.0,
+        47.0,
+        41.25,
+        51.75
+      ]
+    },
+    {
+      "task_id": 119,
+      "reverse": true,
+      "prompt_sha256": "75188be2b2d5ffc31b3068430014e638a60f108edbe0ec12cd048a881443fec2",
+      "input_tokens": 108,
+      "letter_logits": [
+        54.25,
+        41.0,
+        50.25,
+        51.0
+      ]
+    }
+  ]
+}

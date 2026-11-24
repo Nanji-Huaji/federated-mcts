@@ -1,0 +1,5 @@
+# Generated text reports may reproduce reference answers, prompts and model responses.
+audit.json
+candidates.jsonl
+outcomes.jsonl
+review.jsonl

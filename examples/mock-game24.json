@@ -1,0 +1,14 @@
+[
+  {
+    "client_name": "remote_client",
+    "model": "deepseek-v4-flash",
+    "api_base": "http://127.0.0.1:9/v1",
+    "max_tokens": 64
+  },
+  {
+    "client_name": "local_client",
+    "model": "Qwen/Qwen2.5-32B-Instruct",
+    "api_base": "http://127.0.0.1:9/v1",
+    "max_tokens": 64
+  }
+]

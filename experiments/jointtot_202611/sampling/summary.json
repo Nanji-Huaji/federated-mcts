@@ -1,0 +1,587 @@
+{
+  "schema": "game24.sampling.paired.v1",
+  "evidence": "Offline rescoring of real archived responses; no inference.",
+  "tasks": 148,
+  "per_task_csv_sha256": "3ea631063ca0625b61dfe11ea76a51578423bbfd361507f21a333145f6b2b3f7",
+  "identity": {
+    "stdout_sha256": "b8cf0359d5216359b51e818ea724d44c259801b687c644dcc8c54bfbd999ccb3",
+    "batch_sha256": {
+      "0": "8a450947b06fd43399f44b1bfafef423b0262e99f75f3df82be659ac3f25aa22",
+      "1": "785cf3aa3c876da203305b5c169b907765541d54ba638d5d34fa014ab8b9054a",
+      "2": "e7ced8c4dae5e5b9572b590d718e1764bd3657d33a54f709af69114dd29167eb",
+      "3": "49f9228b0c054a293f4412dea50ec14d5c2021139add117a2525b51a24ee7e4a",
+      "4": "3fd8363e8cf799034cdee0efd8ab87d6f0485c8ad820e37cce63c2e408c6388a",
+      "5": "23739658af93c618838fb30ac8db042eb77f4bdbb56d33df1feb24b58c5b369d",
+      "6": "f79399d16113f730eadb8265fb0d861dea672c759b26f90c840a9d19fde023c0",
+      "7": "4472dd945cfc2f4bc61f36343f1f00140ed6d6d2b55c33f5b11658ce95406b7d",
+      "8": "8859ae8b0e154ee688f6a8c53455c63f3e0144c0d1edd4f4d426059ae4464168",
+      "9": "2eb1cc574dabcf39bcaa1807e6cc94aef7caf0b7a735f37e1e7d0243d2c37809"
+    },
+    "historical_commit": "3cd916a973b934bf93023f2d82d78fe0f5369b91",
+    "historical_source_sha256": {
+      "do_exp.py": "d4f770e42c8bdcc47dd80f19928996d44d4915f640f99aec8a77d4381c17ecc2",
+      "scripts/game24/eval_deepseek_pre_baseline.sh": "0affa7730ff2dcdf26fa48650f32514c5beb48aea79916fc7ddffa65ca94e481",
+      "merged_run.py": "e7bd20f0b25401abb4e071d094820e2e8fcbca85e0ec4cebe85c5467b868a544",
+      "src/tot/tasks/__init__.py": "a25ef6dbeaa5a0e9a99354c050ceee468d36018df5db0b9e2ba732e7231296c6",
+      "src/tot/tasks/game24.py": "17b03460db4d2aed7e54ebdbdef2b095ec2886d973484c298232e93c149584f9",
+      "src/tot/methods/bfs.py": "707631f4b7a7f5c19f0f125c4a7944bcac8aa53f75caf9c1ef95d1fcd5f77bb7",
+      "src/tot/prompts/game24.py": "97333c4fa70c1af261adb998aba785e83c5085c50debe3c8336fc43d1adb44f7",
+      "src/tot/models.py": "b180ac76e5ad41ef3a7300a316c5f67ead548df64519112924ef6766d47fa377",
+      "src/tot/data/24/24_extracted.csv": "a5904d5a779bd413546955d7d2ef4ba4ed417d05855404086f7fd6940b01b4c9",
+      "src/tot/data/24/24.csv": "b9f12b3e36d987a3c714c4cef17d89a137d7c59da26532fcfb93b4821d8111b5"
+    },
+    "cohort_sha256": "1dd303a52cd3486f75b0ba4f29d4de16164437a1bc4611d6768041fcd5cb3857",
+    "original_rank_ranges_inclusive": [
+      [
+        100,
+        199
+      ],
+      [
+        500,
+        547
+      ]
+    ],
+    "run_to_batch": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "rows_matched": 1480,
+    "identity_basis": "historical_recipe_reconstruction",
+    "run_binding": "unique_ordered_exact_responses_indices_and_flags_plus_rename_and_usage",
+    "prompt_inputs_logged": false,
+    "execution_commit_logged": false,
+    "requested_model": "deepseek-v3",
+    "per_task_model_bindings": 1480,
+    "configured_local_model": "qwen2.5-32b-instruct",
+    "local_generation_bindings": 0,
+    "model_evidence": "configured_remote_and_generation_callable_and_usage_label",
+    "server_model_attested": false
+  },
+  "pairing": {
+    "rule": "For every (batch, idx), the four ordered integers bound without consulting answer arithmetic match the archived tree input at that idx.",
+    "meaning_of_bound": "Reconstructed from historical recipe, snapshot and exact response/collector evidence; not prompt capture.",
+    "matched_slots": 1480,
+    "primary_cohort": "All 148, including no solution and every unparseable output.",
+    "input_sha256_encoding": "SHA-256 of four ordered ASCII decimal integers separated by single spaces, no LF",
+    "current_csv_one_based_ranks_in_order": [
+      [
+        100,
+        199
+      ],
+      [
+        500,
+        547
+      ]
+    ]
+  },
+  "protocol": {
+    "task_hit": "At least one strictly verified submission in the fixed prefix; no repair, search or averaging over permutations.",
+    "complete": "Digit files in chronological order 0..k-1. Final nonblank line (<=256 chars), optional Answer: / Final Answer:, optional = 24. ASCII decimal integer leaves; + - * /; parentheses and whitespace. Allowlisted AST. Exactly four leaves with the actual multiset; all intermediate results nonnegative integers; no division by zero or remainder; final 24. Earlier CoT is not an alternate submission.",
+    "tree": "Primary: any of the final retained trajectories, not all generated nodes. Exactly three legal binary steps from the four inputs, same integer rules, verify results and every declared left multiset. Sensitivity: first min(k, retained).",
+    "independence": "Repeated full-answer requests; no evidence of RNG seeds, cache settings, server revision or statistical independence. Tree slots share frontiers.",
+    "interval": "Exact 2.5%/97.5% percentiles resampling matched tasks with replacement from this fixed cohort (148 draws); descriptive, not proof of significance/equivalence or representative held-out accuracy."
+  },
+  "complete": {
+    "slots": 1480,
+    "strict_verdicts": {
+      "format": 365,
+      "inexact_division": 6,
+      "leaf_count": 67,
+      "not_24": 270,
+      "valid": 760,
+      "wrong_leaves": 5,
+      "wrong_or_ambiguous_rhs": 7
+    },
+    "strict_hits_by_batch": [
+      77,
+      79,
+      76,
+      81,
+      73,
+      76,
+      80,
+      69,
+      69,
+      80
+    ],
+    "legacy_positive_slots": 0,
+    "strict_vs_legacy_disagreements": 760,
+    "solved_in_first_k": {
+      "1": 77,
+      "3": 106,
+      "10": 130
+    },
+    "duplicates": {
+      "equality": "Exact decoded response strings, including whitespace, for the same historically bound task.",
+      "tasks_by_distinct_texts_out_of_ten": {
+        "1": 5,
+        "2": 6,
+        "3": 6,
+        "4": 7,
+        "5": 6,
+        "6": 9,
+        "7": 10,
+        "8": 9,
+        "9": 20,
+        "10": 70
+      },
+      "unique_task_text_pairs": 1169,
+      "duplicate_slots_after_first": 311,
+      "distinct_task_valid_expression_shapes": 249,
+      "valid_shape_definition": "AST of a verified answer, constant integer leaves; ignore whitespace/parentheses redundant for grouping and commute +/* only. No associativity or algebraic simplification.",
+      "same_output_tasks_by_pair_of_digit_files": {
+        "0,1": 21,
+        "0,2": 19,
+        "0,3": 25,
+        "0,4": 18,
+        "0,5": 24,
+        "0,6": 22,
+        "0,7": 17,
+        "0,8": 20,
+        "0,9": 20,
+        "1,2": 18,
+        "1,3": 23,
+        "1,4": 18,
+        "1,5": 21,
+        "1,6": 17,
+        "1,7": 18,
+        "1,8": 20,
+        "1,9": 20,
+        "2,3": 17,
+        "2,4": 16,
+        "2,5": 19,
+        "2,6": 18,
+        "2,7": 16,
+        "2,8": 20,
+        "2,9": 21,
+        "3,4": 22,
+        "3,5": 20,
+        "3,6": 15,
+        "3,7": 18,
+        "3,8": 21,
+        "3,9": 25,
+        "4,5": 22,
+        "4,6": 18,
+        "4,7": 17,
+        "4,8": 20,
+        "4,9": 25,
+        "5,6": 20,
+        "5,7": 22,
+        "5,8": 24,
+        "5,9": 21,
+        "6,7": 14,
+        "6,8": 19,
+        "6,9": 21,
+        "7,8": 24,
+        "7,9": 18,
+        "8,9": 24
+      }
+    },
+    "derived_files_check": {
+      "source_sha256": {
+        "merged_results.json": "300fdd1d5feafbe06890e782a42c256a06dab352557a56f81dc2b266b63b96a7",
+        "merged.json": "f85e87629d6b48ea19dd79f83b5e35a0b909416df9ea6c286c7a6dde4807530a"
+      },
+      "merged_slot_to_original_batch_zero_based": [
+        4,
+        9,
+        6,
+        8,
+        1,
+        5,
+        3,
+        2,
+        7,
+        0
+      ],
+      "merged_results_terminal_counters_match_sum": true,
+      "merged_json_counters_match_last_batch_only": true,
+      "ordered_answer_stream_sha256_by_digit": [
+        "0b8b7c283cb10917b5bcb78d9548529bb24965dcbed202f57a60b547745e80ef",
+        "6a3b78b70ecb2569fd4a8cf0ddee484f0ed4dcd6bc718309b583b6d5646bec40",
+        "354a2bc01a30cf95cc6c4ad1c1adb6fc003f3720f34695d07936f81d19603227",
+        "c7598b4eef505ffb0a6f278d5e8f5cd16d62106819f3d8d82926d71bee8175fc",
+        "6e14684fd128aca5d13d59a252ee2bbde0c87d4d463e098134d851fc1baf04be",
+        "9667ee1412b4cf9001de1ba48a3aefc7c49096805f52ff363794d5c4a2de0e8d",
+        "6db23ce599f31dd0aef829c29933e7dc0fc36578304cac93677e429e9e6ee868",
+        "3c0bc041b803acd554f03874d2e29e709cfb8ec489755a5200eb502b13d1c83c",
+        "9dcd4deb56c7cf99b6aaaebfb36e6f18bda379d369a853ebeec42c821377ec25",
+        "613aa2bf0e1111351485eeb015c1e0dbaebe85d7d64f7051c773054e7dbf1347"
+      ],
+      "stream_hash_encoding": "SHA-256 of UTF-8 compact JSON string array in idx order; no LF",
+      "distinct_full_response_streams": 10
+    }
+  },
+  "tree": {
+    "archive_glob_in_logs": "*_10_start0_end148*check_True*warm_True*idx_0.json",
+    "n_archive_files": 1,
+    "input_order_sha256": "db473ae0eee33f635c3434b507e70cf882e99108f5c34464bcfbf04f0f04433d",
+    "slot_width_histogram": {
+      "3": 3,
+      "9": 1,
+      "10": 144
+    },
+    "selected_line_count_histogram": {
+      "1": 1,
+      "2": 102,
+      "3": 1355
+    },
+    "legacy_label_disagreements": 0,
+    "duplication": {
+      "proposal_pools": {
+        "occurrences": 8298,
+        "distinct": 8181,
+        "duplicate_excess": 117,
+        "multiplicity_histogram": {
+          "1": 8066,
+          "2": 113,
+          "3": 2
+        }
+      },
+      "final_pool": {
+        "occurrences": 2286,
+        "distinct": 2285,
+        "duplicate_excess": 1,
+        "multiplicity_histogram": {
+          "1": 2284,
+          "2": 1
+        }
+      },
+      "all_selected_frontiers": {
+        "occurrences": 3897,
+        "distinct": 3797,
+        "duplicate_excess": 100,
+        "multiplicity_histogram": {
+          "1": 3698,
+          "2": 98,
+          "3": 1
+        }
+      },
+      "input_indices": {
+        "occurrences": 148,
+        "distinct": 148,
+        "duplicate_excess": 0,
+        "multiplicity_histogram": {
+          "1": 148
+        }
+      },
+      "input_multisets": {
+        "occurrences": 148,
+        "distinct": 148,
+        "duplicate_excess": 0,
+        "multiplicity_histogram": {
+          "1": 148
+        }
+      },
+      "records_verbatim": {
+        "occurrences": 148,
+        "distinct": 148,
+        "duplicate_excess": 0,
+        "multiplicity_histogram": {
+          "1": 148
+        }
+      },
+      "ordered_search_traces": {
+        "occurrences": 148,
+        "distinct": 148,
+        "duplicate_excess": 0,
+        "multiplicity_histogram": {
+          "1": 148
+        }
+      },
+      "ordered_selected_vectors": {
+        "occurrences": 148,
+        "distinct": 148,
+        "duplicate_excess": 0,
+        "multiplicity_histogram": {
+          "1": 148
+        }
+      },
+      "retained_trajectories": {
+        "occurrences": 1458,
+        "distinct": 1458,
+        "duplicate_excess": 0,
+        "multiplicity_histogram": {
+          "1": 1458
+        }
+      },
+      "valid_ordered_solutions": {
+        "occurrences": 609,
+        "distinct": 609,
+        "duplicate_excess": 0,
+        "multiplicity_histogram": {
+          "1": 609
+        }
+      },
+      "valid_expression_sets": {
+        "occurrences": 609,
+        "distinct": 575,
+        "duplicate_excess": 34,
+        "multiplicity_histogram": {
+          "1": 541,
+          "2": 34
+        }
+      },
+      "within_pool_collisions": [
+        {
+          "idx": 55,
+          "depth": 2,
+          "raw_sha256": "2527381d3c1d4e443145a57b7b88ef6aba7e0d88f31ebee0cb0fe62e0f629be6",
+          "pool_slots": [
+            2,
+            3
+          ],
+          "selected_slots": [
+            2
+          ]
+        }
+      ],
+      "ambiguous_expression_slots": 35
+    },
+    "search_by_depth": [
+      {
+        "depth": 0,
+        "parent_slots": 148,
+        "proposal_slots": 981,
+        "scored_slots": 981,
+        "selected_slots": 981,
+        "carry_slots": 0,
+        "extended_slots": 981,
+        "unlinked_slots": 0
+      },
+      {
+        "depth": 1,
+        "parent_slots": 981,
+        "proposal_slots": 5031,
+        "scored_slots": 5031,
+        "selected_slots": 1458,
+        "carry_slots": 6,
+        "extended_slots": 5025,
+        "unlinked_slots": 0
+      },
+      {
+        "depth": 2,
+        "parent_slots": 1458,
+        "proposal_slots": 2286,
+        "scored_slots": 2286,
+        "selected_slots": 1458,
+        "carry_slots": 110,
+        "extended_slots": 2176,
+        "unlinked_slots": 0
+      }
+    ],
+    "budget": {
+      "total_calls": 16048,
+      "prompt_tokens": 9433188,
+      "completion_tokens": 749643,
+      "total_tokens": 10182831,
+      "model": "deepseek-v3",
+      "cost": "10.932474",
+      "cost_unit": "CNY",
+      "currency_field_in_json": null,
+      "unit_basis": "historical token tariff; yuan in accounting_context",
+      "edge_model_named_in_performance": "qwen2.5-32b-instruct",
+      "edge_usage": null,
+      "prefix_usage": null,
+      "per_call_usage": null,
+      "role_split_usage": null,
+      "billed_cost": null,
+      "wall_seconds": null,
+      "logged_time_fields_all_zero": true
+    },
+    "n_runs": 148,
+    "n_retained_slots": 1458,
+    "selected_slot_verdicts": {
+      "not_24": 746,
+      "step_count": 103,
+      "valid": 609
+    },
+    "solved_at": {
+      "1": 87,
+      "3": 124,
+      "full": 132
+    }
+  },
+  "tree_sources": {
+    "archive": {
+      "path": "logs/game24/tot/deepseek-v3/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start0_end148_smg_False_sme_False_check_True_rule_False_warm_True_last_False_idx_0.json",
+      "sha256": "c161b7c21e1774160011b9d61aa38c904e5f37cb51cddca211bfdd08920974a4",
+      "bytes": 1759818
+    },
+    "performance": {
+      "path": "logs/game24/tot/deepseek-v3/0.7_propose_n_generate_sample_1_value_n_evaluate_sample_1_method_select_greedy_n_select_sample_10_start0_end148_smg_False_sme_False_check_True_rule_False_warm_True_last_False_idx_0_performance.json",
+      "sha256": "167448a73cca65d8d2624c339b362d86a6791c1417b842a9c52aee5b72eef2a4",
+      "bytes": 316
+    },
+    "dataset": {
+      "path": "src/tot/data/24/24.csv",
+      "sha256": "b9f12b3e36d987a3c714c4cef17d89a137d7c59da26532fcfb93b4821d8111b5",
+      "bytes": 48235
+    },
+    "prompt_context": {
+      "path": "src/tot/prompts/game24.py",
+      "sha256": "97333c4fa70c1af261adb998aba785e83c5085c50debe3c8336fc43d1adb44f7",
+      "bytes": 16620
+    },
+    "task_context": {
+      "path": "src/tot/tasks/game24.py",
+      "sha256": "d1600b8d123dfdde6048d4d8c30fbdc71c26278319f45d113707b30791b5649a",
+      "bytes": 6777
+    },
+    "solver_context": {
+      "path": "src/tot/methods/bfs.py",
+      "sha256": "0992ed817fa15f611378ab7e10bd85b012f04efe8c1576c1285bccf4df8569ed",
+      "bytes": 32044
+    },
+    "format_context": {
+      "path": "src/tot/pattern_match.py",
+      "sha256": "f74f39c5d9d76b05e6afa8a2f62eca200e862f83f9595a7af2f6c65d78491bba",
+      "bytes": 9641
+    },
+    "accounting_context": {
+      "path": "src/tot/models.py",
+      "sha256": "7829d6992c2ef4da90c6d212cd072565488d005966d84ea069f1d0c13afec49d",
+      "bytes": 8690
+    }
+  },
+  "primary_paired_full_tree_vs_complete_k": {
+    "1": {
+      "tasks": 148,
+      "both": 76,
+      "tree_only": 56,
+      "complete_only": 1,
+      "neither": 15,
+      "complete_solved": 77,
+      "tree_solved": 132,
+      "tree_minus_complete_pp": 37.162162,
+      "paired_task_bootstrap95_pp": [
+        29.054054,
+        45.27027
+      ]
+    },
+    "3": {
+      "tasks": 148,
+      "both": 105,
+      "tree_only": 27,
+      "complete_only": 1,
+      "neither": 15,
+      "complete_solved": 106,
+      "tree_solved": 132,
+      "tree_minus_complete_pp": 17.567568,
+      "paired_task_bootstrap95_pp": [
+        11.486486,
+        24.324324
+      ]
+    },
+    "10": {
+      "tasks": 148,
+      "both": 124,
+      "tree_only": 8,
+      "complete_only": 6,
+      "neither": 10,
+      "complete_solved": 130,
+      "tree_solved": 132,
+      "tree_minus_complete_pp": 1.351351,
+      "paired_task_bootstrap95_pp": [
+        -3.378378,
+        6.081081
+      ]
+    }
+  },
+  "sensitivity_paired_tree_topk_vs_complete_k": {
+    "1": {
+      "tasks": 148,
+      "both": 46,
+      "tree_only": 41,
+      "complete_only": 31,
+      "neither": 30,
+      "complete_solved": 77,
+      "tree_solved": 87,
+      "tree_minus_complete_pp": 6.756757,
+      "paired_task_bootstrap95_pp": [
+        -4.72973,
+        18.243243
+      ]
+    },
+    "3": {
+      "tasks": 148,
+      "both": 100,
+      "tree_only": 24,
+      "complete_only": 6,
+      "neither": 18,
+      "complete_solved": 106,
+      "tree_solved": 124,
+      "tree_minus_complete_pp": 12.162162,
+      "paired_task_bootstrap95_pp": [
+        5.405405,
+        18.918919
+      ]
+    },
+    "10": {
+      "tasks": 148,
+      "both": 124,
+      "tree_only": 8,
+      "complete_only": 6,
+      "neither": 10,
+      "complete_solved": 130,
+      "tree_solved": 132,
+      "tree_minus_complete_pp": 1.351351,
+      "paired_task_bootstrap95_pp": [
+        -3.378378,
+        6.081081
+      ]
+    }
+  },
+  "usage": {
+    "deepseek_counters_scope": "Historical cumulative deepseek-v3 usage, differenced within each run; summing all deltas reproduces final counters.",
+    "cost_unit": "CNY (元 from the historical accounting code; JSON has no currency key).",
+    "cost_basis": "Archived cost estimates; 1/2 yuan per million prompt/completion tokens, respectively, consistent to 1e-12. No actual bills.",
+    "totals_by_arm": {
+      "complete_k1": {
+        "total_calls": 148,
+        "prompt_tokens": 64084,
+        "completion_tokens": 35089,
+        "total_tokens": 99173,
+        "cost": "0.134262"
+      },
+      "complete_k3": {
+        "total_calls": 444,
+        "prompt_tokens": 192252,
+        "completion_tokens": 101798,
+        "total_tokens": 294050,
+        "cost": "0.395848"
+      },
+      "complete_k10": {
+        "total_calls": 1480,
+        "prompt_tokens": 640840,
+        "completion_tokens": 335276,
+        "total_tokens": 976116,
+        "cost": "1.31139200000000001"
+      },
+      "tree_full": {
+        "total_calls": 16048,
+        "prompt_tokens": 9433188,
+        "completion_tokens": 749643,
+        "total_tokens": 10182831,
+        "cost": "10.93247400000000000"
+      }
+    },
+    "unavailable": {
+      "provider_invoice": null,
+      "tree_recomputed_cost_at_prefix": null,
+      "per_role_billing": null,
+      "gpu_energy_cost": null,
+      "end_to_end_latency": null
+    },
+    "timing": "Generation and evaluation timing fields are zero placeholders in both archives; no measured speedup.",
+    "comparison": "The same number of returned strings does not match compute. All tree top-k slices reuse the entire tree run and budget; not new width-k searches."
+  }
+}

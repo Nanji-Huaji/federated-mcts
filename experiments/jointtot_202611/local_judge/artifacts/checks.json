@@ -1,0 +1,21 @@
+{
+  "n_puzzles": 20,
+  "n_unique_presentations_per_model": 40,
+  "input_sha256": "54a574ef35cfe3f42dec8f8719ac1265c548b5d31063f30a1f83863519fa51be",
+  "score_sha256": {
+    "7B": "d691c8c4949a59ad7aea52c6bc8aeeedb9ad4b7a3fb9f24f9142cac035eb3f1b",
+    "32B": "cd8047b68e06fa23e4b170cd59622427958cbc6b13391200d54a2c27fe96a0ee"
+  },
+  "conditional_ceiling": 18,
+  "new_forward_prompts": 80,
+  "prompt_identity_checks": 40,
+  "oracle_crosschecks": 80,
+  "primary_larger_only": 8,
+  "primary_smaller_only": 1,
+  "primary_larger_minus_smaller_pp": 35.0,
+  "paired_percentile95_pp": [
+    10.0,
+    60.0
+  ],
+  "exact_two_sided_mcnemar": 0.0390625
+}

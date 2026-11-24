@@ -1,0 +1,538 @@
+{
+  "source": "logs/game24/tot/qwen3.7-plus/0.9_propose_n_generate_sample_2_vote_n_evaluate_sample_3_method_select_greedy_n_select_sample_2_start900_end1000_smg_False_sme_False_check_True_rule_False_warm_False_last_False_idx_0_ntasks200.json",
+  "source_sha256": "24b3754c03cd7978ebb008550d99a6681c55f6baeb86f36e7a18401771dac765",
+  "manifest": "logs/game24/tot/qwen3.7-plus/0.9_propose_n_generate_sample_2_vote_n_evaluate_sample_3_method_select_greedy_n_select_sample_2_start900_end1000_smg_False_sme_False_check_True_rule_False_warm_False_last_False_idx_0_ntasks200_manifest.json",
+  "manifest_sha256": "222cfbb1d038a2b739985afb22dc794503e4d027291c368527d8796ff6aff7f5",
+  "frozen_sha256": "574fb1c6d03e39dc9cc8731308ebb9933852b44116376d9d5b9ba52e468f7772",
+  "per_frontier_sha256": "63ea1e34e940cd953961b628c39ba3ea83e4493dc4f0a28f47673c4d58da2c4f",
+  "depths": [
+    0,
+    1
+  ],
+  "frontiers": 400,
+  "width": 2,
+  "estimand": "At fixed B0 parents: P(retain >=1 strict live child | original pool has >=1).",
+  "uncertainty": {
+    "resamples": 10000,
+    "unit": "paired live-pool validation task within stratum",
+    "base_seed": 20261124,
+    "seed_rule": "base_seed + depth",
+    "statistic": "percentile bootstrap of difference in percentage points vs stable; zero_uniform integrates the lottery before resampling tasks"
+  },
+  "baseline_audit": {
+    "stable_order_matches_by_depth": [
+      200,
+      200,
+      200
+    ],
+    "recorded_questions": 200,
+    "recorded_solved_questions": 51,
+    "recorded_outputs": 400,
+    "recorded_correct_outputs": 53,
+    "strict_terminal_vs_recorded_output_disagreements": 0
+  },
+  "by_depth": {
+    "0": {
+      "all": {
+        "questions": 200,
+        "live_pool_questions": 199,
+        "dead_pool_questions": 1,
+        "candidates": 3735,
+        "invalid_prefix_candidates": 720,
+        "nonadvancing_candidates": 0,
+        "stable_nonadvancing_slots": 0,
+        "methods": {
+          "stable": {
+            "hits": 131,
+            "retention_pct": 65.829146,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress": {
+            "hits": 131,
+            "retention_pct": 65.829146,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "state_max": {
+            "hits": 131,
+            "retention_pct": 65.829146,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "state_sum": {
+            "hits": 131,
+            "retention_pct": 65.829146,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress_state_max": {
+            "hits": 131,
+            "retention_pct": 65.829146,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "zero_uniform": {
+            "hits": 129.259253,
+            "retention_pct": 64.954399,
+            "gained": 8.091674,
+            "lost": 9.83242,
+            "delta_pp": -0.874747,
+            "paired_ci95_pp": [
+              -3.952852,
+              2.117913
+            ],
+            "exact_expected_counts": {
+              "hits": "8278512283/64045800",
+              "gained": "1036475411/128091600",
+              "lost": "3650581/371280"
+            },
+            "fixed_sample_lottery_sd_hits": 2.828282
+          }
+        }
+      },
+      "zero_contest": {
+        "questions": 96,
+        "live_pool_questions": 95,
+        "dead_pool_questions": 1,
+        "candidates": 1706,
+        "invalid_prefix_candidates": 311,
+        "nonadvancing_candidates": 0,
+        "stable_nonadvancing_slots": 0,
+        "methods": {
+          "stable": {
+            "hits": 57,
+            "retention_pct": 60,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress": {
+            "hits": 57,
+            "retention_pct": 60,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "state_max": {
+            "hits": 57,
+            "retention_pct": 60,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "state_sum": {
+            "hits": 57,
+            "retention_pct": 60,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress_state_max": {
+            "hits": 57,
+            "retention_pct": 60,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "zero_uniform": {
+            "hits": 55.259253,
+            "retention_pct": 58.167635,
+            "gained": 8.091674,
+            "lost": 9.83242,
+            "delta_pp": -1.832365,
+            "paired_ci95_pp": [
+              -8.422681,
+              4.541015
+            ],
+            "exact_expected_counts": {
+              "hits": "3539123083/64045800",
+              "gained": "1036475411/128091600",
+              "lost": "3650581/371280"
+            },
+            "fixed_sample_lottery_sd_hits": 2.828282
+          }
+        }
+      },
+      "no_zero_contest": {
+        "questions": 104,
+        "live_pool_questions": 104,
+        "dead_pool_questions": 0,
+        "candidates": 2029,
+        "invalid_prefix_candidates": 409,
+        "nonadvancing_candidates": 0,
+        "stable_nonadvancing_slots": 0,
+        "methods": {
+          "stable": {
+            "hits": 74,
+            "retention_pct": 71.153846,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress": {
+            "hits": 74,
+            "retention_pct": 71.153846,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "state_max": {
+            "hits": 74,
+            "retention_pct": 71.153846,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "state_sum": {
+            "hits": 74,
+            "retention_pct": 71.153846,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress_state_max": {
+            "hits": 74,
+            "retention_pct": 71.153846,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "zero_uniform": {
+            "hits": 74,
+            "retention_pct": 71.153846,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ],
+            "exact_expected_counts": {
+              "hits": "74",
+              "gained": "0",
+              "lost": "0"
+            },
+            "fixed_sample_lottery_sd_hits": 0.0
+          }
+        }
+      }
+    },
+    "1": {
+      "all": {
+        "questions": 200,
+        "live_pool_questions": 118,
+        "dead_pool_questions": 82,
+        "candidates": 4361,
+        "invalid_prefix_candidates": 834,
+        "nonadvancing_candidates": 319,
+        "stable_nonadvancing_slots": 63,
+        "methods": {
+          "stable": {
+            "hits": 51,
+            "retention_pct": 43.220339,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress": {
+            "hits": 56,
+            "retention_pct": 47.457627,
+            "gained": 5,
+            "lost": 0,
+            "delta_pp": 4.237288,
+            "paired_ci95_pp": [
+              0.847458,
+              8.474576
+            ]
+          },
+          "state_max": {
+            "hits": 52,
+            "retention_pct": 44.067797,
+            "gained": 1,
+            "lost": 0,
+            "delta_pp": 0.847458,
+            "paired_ci95_pp": [
+              0.0,
+              2.542373
+            ]
+          },
+          "state_sum": {
+            "hits": 52,
+            "retention_pct": 44.067797,
+            "gained": 1,
+            "lost": 0,
+            "delta_pp": 0.847458,
+            "paired_ci95_pp": [
+              0.0,
+              2.542373
+            ]
+          },
+          "progress_state_max": {
+            "hits": 57,
+            "retention_pct": 48.305085,
+            "gained": 6,
+            "lost": 0,
+            "delta_pp": 5.084746,
+            "paired_ci95_pp": [
+              1.694915,
+              9.322034
+            ]
+          },
+          "zero_uniform": {
+            "hits": 53.094698,
+            "retention_pct": 44.995507,
+            "gained": 3.908733,
+            "lost": 1.814035,
+            "delta_pp": 1.775168,
+            "paired_ci95_pp": [
+              -0.901042,
+              3.911536
+            ],
+            "exact_expected_counts": {
+              "hits": "177675727309/3346393050",
+              "gained": "13080156169/3346393050",
+              "lost": "517/285"
+            },
+            "fixed_sample_lottery_sd_hits": 1.874323
+          }
+        }
+      },
+      "zero_contest": {
+        "questions": 118,
+        "live_pool_questions": 71,
+        "dead_pool_questions": 47,
+        "candidates": 2517,
+        "invalid_prefix_candidates": 480,
+        "nonadvancing_candidates": 189,
+        "stable_nonadvancing_slots": 57,
+        "methods": {
+          "stable": {
+            "hits": 29,
+            "retention_pct": 40.84507,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress": {
+            "hits": 34,
+            "retention_pct": 47.887324,
+            "gained": 5,
+            "lost": 0,
+            "delta_pp": 7.042254,
+            "paired_ci95_pp": [
+              1.408451,
+              14.084507
+            ]
+          },
+          "state_max": {
+            "hits": 30,
+            "retention_pct": 42.253521,
+            "gained": 1,
+            "lost": 0,
+            "delta_pp": 1.408451,
+            "paired_ci95_pp": [
+              0.0,
+              4.225352
+            ]
+          },
+          "state_sum": {
+            "hits": 30,
+            "retention_pct": 42.253521,
+            "gained": 1,
+            "lost": 0,
+            "delta_pp": 1.408451,
+            "paired_ci95_pp": [
+              0.0,
+              4.225352
+            ]
+          },
+          "progress_state_max": {
+            "hits": 35,
+            "retention_pct": 49.295775,
+            "gained": 6,
+            "lost": 0,
+            "delta_pp": 8.450704,
+            "paired_ci95_pp": [
+              2.816901,
+              15.492958
+            ]
+          },
+          "zero_uniform": {
+            "hits": 31.094698,
+            "retention_pct": 43.795349,
+            "gained": 3.908733,
+            "lost": 1.814035,
+            "delta_pp": 2.950278,
+            "paired_ci95_pp": [
+              -1.503346,
+              6.446533
+            ],
+            "exact_expected_counts": {
+              "hits": "104055080209/3346393050",
+              "gained": "13080156169/3346393050",
+              "lost": "517/285"
+            },
+            "fixed_sample_lottery_sd_hits": 1.874323
+          }
+        }
+      },
+      "no_zero_contest": {
+        "questions": 82,
+        "live_pool_questions": 47,
+        "dead_pool_questions": 35,
+        "candidates": 1844,
+        "invalid_prefix_candidates": 354,
+        "nonadvancing_candidates": 130,
+        "stable_nonadvancing_slots": 6,
+        "methods": {
+          "stable": {
+            "hits": 22,
+            "retention_pct": 46.808511,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress": {
+            "hits": 22,
+            "retention_pct": 46.808511,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "state_max": {
+            "hits": 22,
+            "retention_pct": 46.808511,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "state_sum": {
+            "hits": 22,
+            "retention_pct": 46.808511,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "progress_state_max": {
+            "hits": 22,
+            "retention_pct": 46.808511,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ]
+          },
+          "zero_uniform": {
+            "hits": 22,
+            "retention_pct": 46.808511,
+            "gained": 0,
+            "lost": 0,
+            "delta_pp": 0,
+            "paired_ci95_pp": [
+              0.0,
+              0.0
+            ],
+            "exact_expected_counts": {
+              "hits": "22",
+              "gained": "0",
+              "lost": "0"
+            },
+            "fixed_sample_lottery_sd_hits": 0.0
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+% Copy the English PDF into the paper's fig directory, then insert this float.
+\begin{figure*}[t]
+    \centering
+    \includegraphics[width=\textwidth]{fig/jointtot-workflow-en.pdf}
+    \caption{JointToT on Game of 24. (A) With edge proposals, Qwen2.5-32B-Instruct proposes moves and DeepSeek-V3 evaluates candidates pooled across all parents. (B) A retained path from the warm-start archive (puzzle ID 900). The dashed sibling ranked 11th, outside the beam of ten. All 19 terminal candidates tied; the highlighted trace was retained fourth and verified after search. (C) Warm start changes only the first-layer proposer; the scorer remains the same.}
+    \label{fig:jt-workflow}
+\end{figure*}

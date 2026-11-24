@@ -1,0 +1,12 @@
+{
+  "inputs": {
+    "archive_game24/summary.json": "180ef14650ccb6adcefb0a75983d44ef2526ee04a0dfe568ee30c473e67c1219",
+    "replay/summary.json": "c587ec05ecefbf5ea61b29b4e99f637c490e0da26a2845fc10b9c4904992c926",
+    "gsm8k/summary.json": "a3f515e300af05d8842ea6c34f7b3f5f734ecba63221b8c4a9c7e3dacae70fc2",
+    "local_judge/artifacts/summary.json": "3f6e462a04c948751a0b37adaca5e37d66fde061d163ca235ae1bc5af4018899",
+    "local_judge/artifacts/checks.json": "e447a44552ae1f76942934986dc9be71465a92f6a7c85a1b58c476178198ef7d",
+    "sampling/summary.json": "29ee639cb5505fa4b96c19cdaeb3c0afe1ce8121c7d3a86c17355ebcf264ff45"
+  },
+  "template_sha256": "e653e1e4f266ffb76b6178e426dbc701b42e0b7d7447963b7a6339eee99f1e13",
+  "rendered_sha256": "1e95dd77a54476adc68e1af1f88a45512d045a752550c67344506ea36e8374f6"
+}
